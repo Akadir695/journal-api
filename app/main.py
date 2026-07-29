@@ -1,4 +1,6 @@
-from fastapi import FastAPI
+from typing import Annotated
+
+from fastapi import FastAPI, Query
 
 app = FastAPI(
     title="journal api",
@@ -10,3 +12,16 @@ app = FastAPI(
 @app.get("/health")
 async def root() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/entries/{entry_id}")
+async def list_entry(entry_id: int) -> dict[str, int]:
+    return {"entry_id": entry_id}
+
+
+@app.get("/entries")
+async def list_entries(
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    mood: str | None = None,
+) -> dict[str, int | str | None]:
+    return {"limit": limit, "mood": mood}
