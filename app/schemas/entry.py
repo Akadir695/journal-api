@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field, field_validator
-from datetime import date
+from datetime import date, datetime
+
 class EntryCreate(BaseModel):             
     title: str = Field(min_length=1, max_length=200)                              
     content: str = Field(min_length=1, max_length=2000)             
@@ -13,8 +14,14 @@ class EntryCreate(BaseModel):
             raise ValueError("cannot be blank")
         return stripped
     
- 
-      
+class EntryRead(BaseModel):
+    id: int
+    title: str                               
+    content: str          
+    mood: int                               
+    entry_date: date
+    created_at: datetime 
+    
       
     
       

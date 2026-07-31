@@ -1,6 +1,7 @@
 from typing import Annotated
 from fastapi import FastAPI, Query
-from app.schemas.entry import EntryCreate
+from app.schemas.entry import EntryCreate, EntryRead
+from datetime import datetime, timezone
 
 app = FastAPI(
     title="journal api",
@@ -22,7 +23,13 @@ async def list_entries(
     return {"limit": limit, "mood": mood}
   
 @app.post("/entries", status_code=201)
-async def create_entry(entry: EntryCreate) -> EntryCreate:
-  return entry
-
+async def create_entry(entry: EntryCreate) -> EntryRead:
+    return EntryRead(
+        id=1,
+        title=entry.title,
+        content=entry.content,
+        mood=entry.mood,
+        entry_date=entry.entry_date,
+        created_at=datetime.now(timezone.utc),
+    )
   
