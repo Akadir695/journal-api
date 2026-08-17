@@ -5,6 +5,7 @@ description = "A private journaling API built with FastAPI."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "alembic>=1.19.1",
     "asyncpg>=0.31.0",
     "fastapi[standard]>=0.140.9",
     "greenlet>=3.5.5",

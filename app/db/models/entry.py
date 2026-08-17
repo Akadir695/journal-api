@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import String, Text, func
+from sqlalchemy import DateTime, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -14,4 +14,6 @@ class Entry(Base):
     content: Mapped[str] = mapped_column(Text)
     mood: Mapped[int]
     entry_date: Mapped[date]
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
