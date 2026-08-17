@@ -1,5 +1,9 @@
 from datetime import UTC, datetime
 
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.db.models.entry import Entry
 from app.schemas.entry import EntryCreate, EntryRead
 
 
@@ -32,3 +36,42 @@ class EntryCrud:
             del self._entries[entry_id]
             return True
         return False
+
+
+class SqlEntryCrud:
+    def __init__(self, db: AsyncSession) -> None:
+        self._db = db
+
+    async def create(self, data: EntryCreate) -> EntryRead:
+        entry = Entry(
+            title=data.title,
+            content=data.content,
+            mood=data.mood,
+            entry_date=data.entry_date,
+        )
+        self._db.add(entry)
+        await self._db.commit()
+        await self._db.refresh(entry)
+        return EntryRead.model_validate(entry)
+
+    async def get(self, entry_id: int) -> EntryRead | None:
+        entry = await self._db.get(Entry, entry_id)  # fetch, keep it
+        if entry is None:  # not found?
+            return None
+        return EntryRead.model_validate(entry)  # convert and return
+
+    async def list_all(self, limit: int) -> list[EntryRead]:
+        result = await self._db.execute(select(Entry).limit(limit))
+        entries = result.scalars().all()
+        results = []
+        for e in entries:
+            results.append(EntryRead.model_validate(e))
+        return results
+
+    async def delete(self, entry_id: int) -> bool:
+        entry = await self._db.get(Entry, entry_id)
+        if entry is None:
+            return False
+        await self._db.delete(entry)
+        await self._db.commit()
+        return True
