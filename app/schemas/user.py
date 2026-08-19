@@ -17,3 +17,7 @@ class UserRead(BaseModel):
     username: str
     is_active: bool
     created_at: datetime
+    
+class Token(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
