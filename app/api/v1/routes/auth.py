@@ -30,6 +30,7 @@ async def register(
         raise ConflictError("Email already registered")
     return await crud.create(data)
 
+
 @router.post("/auth/login")
 async def login(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
