@@ -42,11 +42,12 @@ class SqlEntryCrud:
     def __init__(self, db: AsyncSession) -> None:
         self._db = db
 
-    async def create(self, data: EntryCreate) -> EntryRead:
+    async def create(self, data: EntryCreate, user_id: int) -> EntryRead:
         entry = Entry(
             title=data.title,
             content=data.content,
             mood=data.mood,
+            user_id=user_id,
             entry_date=data.entry_date,
         )
         self._db.add(entry)
@@ -54,22 +55,30 @@ class SqlEntryCrud:
         await self._db.refresh(entry)
         return EntryRead.model_validate(entry)
 
-    async def get(self, entry_id: int) -> EntryRead | None:
-        entry = await self._db.get(Entry, entry_id)  # fetch, keep it
-        if entry is None:  # not found?
+    async def get(self, entry_id: int, user_id: int) -> EntryRead | None:
+        result = await self._db.execute(
+            select(Entry).where(Entry.id == entry_id, Entry.user_id == user_id)
+        )
+        entry = result.scalar_one_or_none()
+        if entry is None:
             return None
-        return EntryRead.model_validate(entry)  # convert and return
+        return EntryRead.model_validate(entry)
 
-    async def list_all(self, limit: int) -> list[EntryRead]:
-        result = await self._db.execute(select(Entry).limit(limit))
+    async def list_all(self, limit: int, user_id: int) -> list[EntryRead]:
+        result = await self._db.execute(
+            select(Entry).where(Entry.user_id == user_id).limit(limit)
+        )
         entries = result.scalars().all()
         results = []
         for e in entries:
             results.append(EntryRead.model_validate(e))
         return results
 
-    async def delete(self, entry_id: int) -> bool:
-        entry = await self._db.get(Entry, entry_id)
+    async def delete(self, entry_id: int, user_id: int) -> bool:
+        result = await self._db.execute(
+            select(Entry).where(Entry.id == entry_id, Entry.user_id == user_id)
+        )
+        entry = result.scalar_one_or_none()
         if entry is None:
             return False
         await self._db.delete(entry)

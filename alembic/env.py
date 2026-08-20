@@ -8,8 +8,11 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
 from app.core.config import get_settings
 from app.db.base import Base
-from app.db.models.entry import Entry  # noqa: F401
-from app.db.models.refresh_token import RefreshToken  # noqa: F401
+from app.db.models.entry import Entry
+from app.db.models.refresh_token import RefreshToken
+from app.db.models.user import User
+
+__all__ = ["Entry", "RefreshToken", "User"]
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
