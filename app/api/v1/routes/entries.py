@@ -57,3 +57,13 @@ async def delete_entry(
 ) -> None:
     if not await crud.delete(entry_id, current_user.id):
         raise NotFoundError("Entry not found")
+@router.post("/entries/{entry_id}/restore", status_code=204)
+async def restore(entry_id: int, 
+    crud: Annotated[SqlEntryCrud, Depends(get_crud)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> None:
+    if not await crud.restore(entry_id, current_user.id):
+      raise NotFoundError("Entry not found")
+    
+    
+    

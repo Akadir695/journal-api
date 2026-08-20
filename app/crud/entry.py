@@ -5,6 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.entry import Entry
 from app.schemas.entry import EntryCreate, EntryRead
+from sqlalchemy import select, update
+from datetime import datetime, timezone
 
 
 class EntryCrud:
@@ -41,6 +43,10 @@ class EntryCrud:
 class SqlEntryCrud:
     def __init__(self, db: AsyncSession) -> None:
         self._db = db
+    def base_query(self, user_id: int):
+         return select(Entry).where(Entry.user_id == 
+            user_id, Entry.deleted_at.is_(None))
+   
 
     async def create(self, data: EntryCreate, user_id: int) -> EntryRead:
         entry = Entry(
@@ -57,7 +63,7 @@ class SqlEntryCrud:
 
     async def get(self, entry_id: int, user_id: int) -> EntryRead | None:
         result = await self._db.execute(
-            select(Entry).where(Entry.id == entry_id, Entry.user_id == user_id)
+            self.base_query(user_id).where(Entry.id == entry_id)
         )
         entry = result.scalar_one_or_none()
         if entry is None:
@@ -66,7 +72,7 @@ class SqlEntryCrud:
 
     async def list_all(self, limit: int, user_id: int) -> list[EntryRead]:
         result = await self._db.execute(
-            select(Entry).where(Entry.user_id == user_id).limit(limit)
+           self.base_query(user_id).limit(limit)
         )
         entries = result.scalars().all()
         results = []
@@ -76,11 +82,20 @@ class SqlEntryCrud:
 
     async def delete(self, entry_id: int, user_id: int) -> bool:
         result = await self._db.execute(
-            select(Entry).where(Entry.id == entry_id, Entry.user_id == user_id)
+        update(Entry)
+             .where(Entry.id == entry_id, Entry.user_id == user_id, Entry.deleted_at.is_(None))
+            .values(deleted_at=datetime.now(timezone.utc))
         )
-        entry = result.scalar_one_or_none()
-        if entry is None:
-            return False
-        await self._db.delete(entry)
+        
         await self._db.commit()
-        return True
+        return result.rowcount > 0
+    async def restore(self, entry_id: int, user_id: int) -> bool:
+        result = await self._db.execute(
+        update(Entry)
+             .where(Entry.id == entry_id, Entry.user_id == user_id, Entry.deleted_at.is_not(None))
+            .values(deleted_at=None)
+        )
+        await self._db.commit()
+        return result.rowcount > 0
+         
+      
