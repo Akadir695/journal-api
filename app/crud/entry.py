@@ -4,9 +4,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.entry import Entry
-from app.schemas.entry import EntryCreate, EntryRead
-from sqlalchemy import select, update
-from datetime import datetime, timezone
+from app.schemas.entry import EntryCreate, EntryRead, Page
+from sqlalchemy import select, update, func
+from datetime import datetime, timezone, date
 
 
 class EntryCrud:
@@ -39,7 +39,7 @@ class EntryCrud:
             return True
         return False
 
-
+SORTABLE = {"date": Entry.entry_date, "mood": Entry.mood}
 class SqlEntryCrud:
     def __init__(self, db: AsyncSession) -> None:
         self._db = db
@@ -70,15 +70,26 @@ class SqlEntryCrud:
             return None
         return EntryRead.model_validate(entry)
 
-    async def list_all(self, limit: int, user_id: int) -> list[EntryRead]:
+    async def list_all(self, user_id: int,  page: int, size: int, mood: 
+        int | None = None, 
+        date_from: date | None = None, date_to: date | None = None, sort: str = "date") -> Page[EntryRead]:  
+              
+        query = self.base_query(user_id)
+        if mood is not None:
+            query = query.where(Entry.mood == mood)
+    
+        count_result = await self._db.execute(
+            select(func.count()).select_from(query.subquery())
+        )
+        total = count_result.scalar_one()
         result = await self._db.execute(
-           self.base_query(user_id).limit(limit)
+            query.limit(size).offset((page - 1) * size).order_by(SORTABLE[sort].desc())
         )
         entries = result.scalars().all()
         results = []
         for e in entries:
             results.append(EntryRead.model_validate(e))
-        return results
+        return Page(items=results, total=total, page=page, size=size)
 
     async def delete(self, entry_id: int, user_id: int) -> bool:
         result = await self._db.execute(

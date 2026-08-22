@@ -6,9 +6,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import NotFoundError
 from app.crud.entry import SqlEntryCrud
 from app.db.session import get_db
-from app.schemas.entry import EntryCreate, EntryRead
+from app.schemas.entry import EntryCreate, EntryRead,  Page
 from app.api.deps import get_current_user
 from app.db.models.user import User
+from datetime import date
+from typing import Literal
 
 
 def get_crud(db: Annotated[AsyncSession, Depends(get_db)]) -> SqlEntryCrud:
@@ -43,10 +45,15 @@ async def read_entry(
 async def list_entries(
     crud: Annotated[SqlEntryCrud, Depends(get_crud)],
     current_user: Annotated[User, Depends(get_current_user)],
-    limit: Annotated[int, Query(ge=1, le=100)] = 20,
-    mood: str | None = None,
-) -> list[EntryRead]:
-    return await crud.list_all(limit, current_user.id)
+    page: Annotated[int, Query(ge=1)] = 1,
+    size: Annotated[int, Query(ge=1, le=100)] = 20,
+    mood: Annotated[int | None, Query(ge=1, le=5)] = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    sort: Literal["date", "mood"] = "date",
+) -> Page[EntryRead]:
+    return await crud.list_all(current_user.id, page, size, mood, date_from, date_to,  sort=sort)
+    
 
 
 @router.delete("/entries/{entry_id}", status_code=204)

@@ -26,3 +26,11 @@ class EntryRead(BaseModel):
     mood: int
     entry_date: date
     created_at: datetime
+
+class Page[T](BaseModel):
+    items: list[T]
+    total: int
+    page: int
+    size: int     
+
+                    
