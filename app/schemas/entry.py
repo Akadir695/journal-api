@@ -1,12 +1,13 @@
 from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-
+from app.schemas.tag import TagRead
 
 class EntryCreate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     content: str = Field(min_length=1, max_length=2000)
     mood: int = Field(ge=1, le=5)
+    tags: list[str] = []
     entry_date: date
 
     @field_validator("title", "content")
@@ -26,6 +27,7 @@ class EntryRead(BaseModel):
     mood: int
     entry_date: date
     created_at: datetime
+    tags: list[TagRead] = []
 
 class Page[T](BaseModel):
     items: list[T]

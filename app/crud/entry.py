@@ -7,7 +7,7 @@ from app.db.models.entry import Entry
 from app.schemas.entry import EntryCreate, EntryRead, Page
 from sqlalchemy import select, update, func
 from datetime import datetime, timezone, date
-
+from app.db.models.tag import Tag
 
 class EntryCrud:
     def __init__(self) -> None:
@@ -40,6 +40,7 @@ class EntryCrud:
         return False
 
 SORTABLE = {"date": Entry.entry_date, "mood": Entry.mood}
+
 class SqlEntryCrud:
     def __init__(self, db: AsyncSession) -> None:
         self._db = db
@@ -56,6 +57,7 @@ class SqlEntryCrud:
             user_id=user_id,
             entry_date=data.entry_date,
         )
+        entry.tags = await self._get_or_create_tags(data.tags, user_id)
         self._db.add(entry)
         await self._db.commit()
         await self._db.refresh(entry)
@@ -109,4 +111,22 @@ class SqlEntryCrud:
         await self._db.commit()
         return result.rowcount > 0
          
-      
+    async def _get_or_create_tags(self, names: list[str], user_id: int) -> list[Tag]:
+        if not names:
+            return []
+        lowered = [n.lower() for n in names]
+
+        result = await self._db.execute(
+            select(Tag).where(
+                Tag.user_id == user_id,
+                func.lower(Tag.name).in_(lowered),
+            )
+        )
+        existing = result.scalars().all()
+        found = {t.name.lower() for t in existing}
+        new_tags = [Tag(name=n, user_id=user_id) for n in names if n.lower() not in found]
+
+        for tag in new_tags:
+            self._db.add(tag)
+        return list(existing) + new_tags
+         
