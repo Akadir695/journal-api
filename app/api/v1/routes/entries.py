@@ -51,8 +51,9 @@ async def list_entries(
     date_from: date | None = None,
     date_to: date | None = None,
     sort: Literal["date", "mood"] = "date",
+    q: str | None = None
 ) -> Page[EntryRead]:
-    return await crud.list_all(current_user.id, page, size, mood, date_from, date_to,  sort=sort)
+    return await crud.list_all(current_user.id, page, size, mood, date_from, date_to,  sort=sort, q=q)
     
 
 

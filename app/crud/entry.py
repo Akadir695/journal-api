@@ -74,11 +74,15 @@ class SqlEntryCrud:
 
     async def list_all(self, user_id: int,  page: int, size: int, mood: 
         int | None = None, 
-        date_from: date | None = None, date_to: date | None = None, sort: str = "date") -> Page[EntryRead]:  
+        date_from: date | None = None, date_to: date | None = None, sort: str = "date", q: str | None = None) -> Page[EntryRead]:  
               
         query = self.base_query(user_id)
         if mood is not None:
             query = query.where(Entry.mood == mood)
+        if q:
+            query = query.where(
+                Entry.search_vector.op("@@")(func.websearch_to_tsquery("english", q))
+            )
     
         count_result = await self._db.execute(
             select(func.count()).select_from(query.subquery())
