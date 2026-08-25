@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from sqlalchemy.dialects.postgresql import TSVECTOR
-from sqlalchemy import DateTime, String, Text, func
+from sqlalchemy import DateTime, String, Text, func, Computed
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import ForeignKey
 from app.db.base import Base
@@ -18,4 +18,8 @@ class Entry(Base):
     tags: Mapped[list["Tag"]] = relationship(secondary="entry_tags", lazy="selectin")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    search_vector: Mapped[str | None] = mapped_column(TSVECTOR, nullable=True)
+    search_vector: Mapped[str | None] = mapped_column(
+        TSVECTOR,
+        Computed("to_tsvector('english', title || ' ' || content)", persisted=True),
+        nullable=True,
+    )
