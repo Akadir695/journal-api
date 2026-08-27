@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.entry import Entry
-from app.schemas.entry import EntryCreate, EntryRead, Page
+from app.schemas.entry import EntryCreate, EntryRead, Page, EntryUpdate
 from sqlalchemy import select, update, func
 from datetime import datetime, timezone, date
 from app.db.models.tag import Tag
@@ -96,7 +96,23 @@ class SqlEntryCrud:
         for e in entries:
             results.append(EntryRead.model_validate(e))
         return Page(items=results, total=total, page=page, size=size)
+    
+    async def update(self, entry_id: int, user_id: int, data: EntryUpdate) -> EntryRead | None:
+        stmt = select(Entry).where(
+            Entry.id == entry_id,
+            Entry.user_id == user_id,
+            Entry.deleted_at.is_(None),
+        )
+        entry = (await self._db.execute(stmt)).scalar_one_or_none()
+        if entry is None:
+            return None
 
+        for field, value in data.model_dump(exclude_unset=True).items():
+            setattr(entry, field, value)
+
+        await self._db.commit()
+        await self._db.refresh(entry)
+        return EntryRead.model_validate(entry)
     async def delete(self, entry_id: int, user_id: int) -> bool:
         result = await self._db.execute(
         update(Entry)
@@ -133,4 +149,4 @@ class SqlEntryCrud:
         for tag in new_tags:
             self._db.add(tag)
         return list(existing) + new_tags
-         
+        

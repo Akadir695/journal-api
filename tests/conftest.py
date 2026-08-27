@@ -56,3 +56,22 @@ async def auth_client(client):
     )
     client.headers["Authorization"] = f"Bearer {response.json()['access_token']}"
     return client
+
+
+# another client
+@pytest_asyncio.fixture
+async def other_client(session):
+    app.dependency_overrides[get_db] = lambda: session
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as c:
+        await c.post(
+            "/api/v1/auth/register",
+            json={"username": "other", "email": "other@test.com", "password": "password123"},
+        )
+        login = await c.post(
+            "/api/v1/auth/login",
+            data={"username": "other@test.com", "password": "password123"},
+        )
+        c.headers["Authorization"] = f"Bearer {login.json()['access_token']}"
+        yield c
+    app.dependency_overrides.clear()

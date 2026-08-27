@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import NotFoundError
 from app.crud.entry import SqlEntryCrud
 from app.db.session import get_db
-from app.schemas.entry import EntryCreate, EntryRead,  Page
+from app.schemas.entry import EntryCreate, EntryRead,  Page, EntryUpdate
 from app.api.deps import get_current_user
 from app.db.models.user import User
 from datetime import date
@@ -55,7 +55,17 @@ async def list_entries(
 ) -> Page[EntryRead]:
     return await crud.list_all(current_user.id, page, size, mood, date_from, date_to,  sort=sort, q=q)
     
-
+@router.patch("/entries/{entry_id}")
+async def update_entry(
+    entry_id: int,
+    data: EntryUpdate,
+    current_user: Annotated[User, Depends(get_current_user)],
+    crud: Annotated[SqlEntryCrud, Depends(get_crud)],
+) -> EntryRead:
+    entry = await crud.update(entry_id, current_user.id, data)
+    if entry is None:
+        raise NotFoundError("Entry not found")
+    return entry
 
 @router.delete("/entries/{entry_id}", status_code=204)
 async def delete_entry(

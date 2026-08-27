@@ -34,5 +34,11 @@ class Page[T](BaseModel):
     total: int
     page: int
     size: int     
+class EntryUpdate(BaseModel):
+    title: str | None = None
+    content: str | None = None
+    mood: int | None = None
+    entry_date: date | None = None
+    tags: list[str] | None = None
 
                     
