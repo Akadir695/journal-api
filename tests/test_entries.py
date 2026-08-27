@@ -65,88 +65,266 @@ async def test_patch_missing_entry_returns_404(auth_client):
 
 
 async def test_delete_entry_returns_204(auth_client):
-     created = await auth_client.post(
+    created = await auth_client.post(
         "/api/v1/entries",
         json={"title": "x", "content": "y", "mood": 3, "entry_date": "2026-08-24"},
     )
-     entry_id = created.json()["id"]
-     response = await   auth_client.delete(f"/api/v1/entries/{entry_id}")
-     assert response.status_code == 204
+    entry_id = created.json()["id"]
+    response = await auth_client.delete(f"/api/v1/entries/{entry_id}")
+    assert response.status_code == 204
 
 
 async def test_read_deleted_entry_returns_404(auth_client):
-     created = await auth_client.post(
+    created = await auth_client.post(
         "/api/v1/entries",
         json={"title": "x", "content": "y", "mood": 3, "entry_date": "2026-08-24"},
     )
-     entry_id = created.json()["id"]
-     await   auth_client.delete(f"/api/v1/entries/{entry_id}")
-     response = await auth_client.get(
+    entry_id = created.json()["id"]
+    await auth_client.delete(f"/api/v1/entries/{entry_id}")
+    response = await auth_client.get(
         f"/api/v1/entries/{entry_id}",
-    
     )
-     assert response.status_code == 404
+    assert response.status_code == 404
+
 
 async def test_list_returns_first_page(auth_client):
-    
+
     for i in range(25):
         await auth_client.post(
             "/api/v1/entries",
             json={"title": f"Entry {i}", "content": "y", "mood": 3, "entry_date": "2026-08-24"},
         )
-    response = await auth_client.get(
-        '/api/v1/entries?page=1&size=10'
-    )
+    response = await auth_client.get("/api/v1/entries?page=1&size=10")
     assert response.status_code == 200
     assert len(response.json()["items"]) == 10
     assert response.json()["total"] == 25
-    
+
+
 async def test_list_returns_second_page(auth_client):
-    
+
     for i in range(25):
         await auth_client.post(
             "/api/v1/entries",
             json={"title": f"Entry {i}", "content": "y", "mood": 3, "entry_date": "2026-08-24"},
         )
-    response = await auth_client.get(
-        '/api/v1/entries?page=1&size=10'
-    )
+
     page1 = await auth_client.get("/api/v1/entries?page=1&size=10")
     page2 = await auth_client.get("/api/v1/entries?page=2&size=10")
     assert page2.status_code == 200
     assert len(page2.json()["items"]) == 10
     assert page1.json()["items"][0]["id"] != page2.json()["items"][0]["id"]
     assert page2.json()["total"] == 25
-    
 
 
 async def test_last_page_returns_remainder(auth_client):
-    
+
     for i in range(25):
         await auth_client.post(
             "/api/v1/entries",
             json={"title": f"Entry {i}", "content": "y", "mood": 3, "entry_date": "2026-08-24"},
         )
-    response = await auth_client.get(
-        '/api/v1/entries?page=3&size=10'
-    )
+    response = await auth_client.get("/api/v1/entries?page=3&size=10")
     assert response.status_code == 200
     assert len(response.json()["items"]) == 5
-  
+
+
 async def test_page_past_end_returns_empty(auth_client):
-    
+
     for i in range(25):
         await auth_client.post(
             "/api/v1/entries",
             json={"title": f"Entry {i}", "content": "y", "mood": 3, "entry_date": "2026-08-24"},
         )
-    response = await auth_client.get(
-        '/api/v1/entries?page=99&size=10'
-    )
+    response = await auth_client.get("/api/v1/entries?page=99&size=10")
     assert response.status_code == 200
     assert len(response.json()["items"]) == 0
 
 
+async def test_filter_by_mood_returns_only_that_mood(auth_client):
 
-    
+    await auth_client.post(
+        "/api/v1/entries",
+        json={"title": "x", "content": "y", "mood": 3, "entry_date": "2026-08-24"},
+    )
+    await auth_client.post(
+        "/api/v1/entries",
+        json={"title": "x", "content": "y", "mood": 4, "entry_date": "2026-08-24"},
+    )
+    await auth_client.post(
+        "/api/v1/entries",
+        json={"title": "x", "content": "y", "mood": 5, "entry_date": "2026-08-24"},
+    )
+    response = await auth_client.get("/api/v1/entries?mood=3")
+    assert response.status_code == 200
+    assert response.json()["total"] == 1
+    assert response.json()["items"][0]["mood"] == 3
 
+
+async def test_filter_by_date_range_returns_entries_in_range(auth_client):
+
+    await auth_client.post(
+        "/api/v1/entries",
+        json={"title": "x", "content": "y", "mood": 3, "entry_date": "2026-01-01"},
+    )
+    await auth_client.post(
+        "/api/v1/entries",
+        json={"title": "x", "content": "y", "mood": 4, "entry_date": "2026-06-01"},
+    )
+    await auth_client.post(
+        "/api/v1/entries",
+        json={"title": "x", "content": "y", "mood": 5, "entry_date": "2026-12-01"},
+    )
+    response = await auth_client.get("/api/v1/entries?date_from=2026-05-01&date_to=2026-07-01")
+    assert response.status_code == 200
+    assert response.json()["total"] == 1
+    assert response.json()["items"][0]["entry_date"] == "2026-06-01"
+
+
+async def test_sort_by_mood_returns_highest_first(auth_client):
+    await auth_client.post(
+        "/api/v1/entries",
+        json={"title": "x", "content": "y", "mood": 3, "entry_date": "2026-01-01"},
+    )
+    await auth_client.post(
+        "/api/v1/entries",
+        json={"title": "x", "content": "y", "mood": 1, "entry_date": "2026-06-01"},
+    )
+    await auth_client.post(
+        "/api/v1/entries",
+        json={"title": "x", "content": "y", "mood": 5, "entry_date": "2026-12-01"},
+    )
+
+    response = await auth_client.get("/api/v1/entries?sort=mood")
+    assert response.status_code == 200
+    assert response.json()["items"][0]["mood"] == 5
+    assert response.json()["items"][2]["mood"] == 1
+
+
+async def test_search_by_q_matches_content(auth_client):
+    await auth_client.post(
+        "/api/v1/entries",
+        json={"title": "x", "content": "kubernetes", "mood": 3, "entry_date": "2026-01-01"},
+    )
+    await auth_client.post(
+        "/api/v1/entries",
+        json={"title": "x", "content": "gardening", "mood": 1, "entry_date": "2026-06-01"},
+    )
+
+    response = await auth_client.get("/api/v1/entries?q=kubernetes")
+    assert response.status_code == 200
+    assert response.json()["total"] == 1
+    assert "kubernetes" in response.json()["items"][0]["content"]
+
+
+async def test_deleted_entry_not_in_list(auth_client):
+    created = await auth_client.post(
+        "/api/v1/entries",
+        json={"title": "x", "content": "kubernetes", "mood": 3, "entry_date": "2026-01-01"},
+    )
+    await auth_client.post(
+        "/api/v1/entries",
+        json={"title": "x", "content": "gardening", "mood": 1, "entry_date": "2026-06-01"},
+    )
+    entry_id = created.json()["id"]
+
+    await auth_client.delete(f"/api/v1/entries/{entry_id}")
+    response = await auth_client.get("/api/v1/entries")
+    assert response.status_code == 200
+    assert response.json()["total"] == 1
+
+
+async def test_restore_brings_entry_back(auth_client):
+    created = await auth_client.post(
+        "/api/v1/entries",
+        json={"title": "x", "content": "kubernetes", "mood": 3, "entry_date": "2026-01-01"},
+    )
+    await auth_client.post(
+        "/api/v1/entries",
+        json={"title": "x", "content": "gardening", "mood": 1, "entry_date": "2026-06-01"},
+    )
+    entry_id = created.json()["id"]
+
+    await auth_client.delete(f"/api/v1/entries/{entry_id}")
+
+    restored = await auth_client.post(f"/api/v1/entries/{entry_id}/restore")
+    assert restored.status_code == 204
+
+
+async def test_restore_live_entry_returns_404(auth_client):
+    created = await auth_client.post(
+        "/api/v1/entries",
+        json={"title": "x", "content": "kubernetes", "mood": 3, "entry_date": "2026-01-01"},
+    )
+
+    entry_id = created.json()["id"]
+
+    restored = await auth_client.post(f"/api/v1/entries/{entry_id}/restore")
+    assert restored.status_code == 404
+
+
+async def test_delete_twice_returns_404(auth_client):
+    created = await auth_client.post(
+        "/api/v1/entries",
+        json={"title": "x", "content": "kubernetes", "mood": 3, "entry_date": "2026-01-01"},
+    )
+
+    entry_id = created.json()["id"]
+
+    await auth_client.delete(f"/api/v1/entries/{entry_id}")
+    response = await auth_client.delete(f"/api/v1/entries/{entry_id}")
+
+    assert response.status_code == 404
+
+
+async def test_other_user_cannot_read_entry(auth_client, other_client):
+
+    created = await auth_client.post(
+        "/api/v1/entries",
+        json={"title": "x", "content": "kubernetes", "mood": 3, "entry_date": "2026-01-01"},
+    )
+
+    entry_id = created.json()["id"]
+    response = await other_client.get(f"/api/v1/entries/{entry_id}")
+
+    assert response.status_code == 404
+
+
+async def test_other_user_cannot_delete_entry(auth_client, other_client):
+
+    created = await auth_client.post(
+        "/api/v1/entries",
+        json={"title": "x", "content": "kubernetes", "mood": 3, "entry_date": "2026-01-01"},
+    )
+
+    entry_id = created.json()["id"]
+    response = await other_client.delete(f"/api/v1/entries/{entry_id}")
+
+    assert response.status_code == 404
+
+
+async def test_other_user_cannot_restore_entry(auth_client, other_client):
+    created = await auth_client.post(
+        "/api/v1/entries",
+        json={"title": "x", "content": "kubernetes", "mood": 3, "entry_date": "2026-01-01"},
+    )
+
+    entry_id = created.json()["id"]
+
+    await auth_client.delete(f"/api/v1/entries/{entry_id}")
+
+    restored = await other_client.post(f"/api/v1/entries/{entry_id}/restore")
+    assert restored.status_code == 404
+
+
+async def test_other_user_list_is_empty(auth_client, other_client):
+    await auth_client.post(
+        "/api/v1/entries",
+        json={"title": "x", "content": "kubernetes", "mood": 3, "entry_date": "2026-01-01"},
+    )
+    await auth_client.post(
+        "/api/v1/entries",
+        json={"title": "x", "content": "gardening", "mood": 1, "entry_date": "2026-06-01"},
+    )
+
+    response = await other_client.get("/api/v1/entries")
+    assert response.json()["total"] == 0

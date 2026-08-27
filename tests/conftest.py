@@ -28,7 +28,11 @@ async def engine():
 async def session(engine):
     connection = await engine.connect()
     transaction = await connection.begin()
-    maker = async_sessionmaker(bind=connection, expire_on_commit=False)
+    maker = async_sessionmaker(
+        bind=connection,
+        expire_on_commit=False,
+        join_transaction_mode="create_savepoint",
+    )
     async with maker() as s:
         yield s
     await transaction.rollback()

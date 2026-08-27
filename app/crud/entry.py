@@ -83,7 +83,10 @@ class SqlEntryCrud:
             query = query.where(
                 Entry.search_vector.op("@@")(func.websearch_to_tsquery("english", q))
             )
-    
+        if date_from is not None:
+            query = query.where(Entry.entry_date >= date_from)
+        if date_to is not None:
+            query = query.where(Entry.entry_date <= date_to)
         count_result = await self._db.execute(
             select(func.count()).select_from(query.subquery())
         )
