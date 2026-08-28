@@ -5,6 +5,7 @@ from app.db.models.entry import Entry
 from app.schemas.stats import StreakOut, YearSummaryOut, MonthStatOut
 from datetime import date, timedelta
 
+
 class StatsCrud:
     def __init__(self, db: AsyncSession) -> None:
         self._db = db
@@ -32,7 +33,7 @@ class StatsCrud:
             .group_by(grouped.c.grp)
             .cte("streaks")
         )
-       
+
         rows = (await self._db.execute(select(streaks))).all()
         if not rows:
             return StreakOut(
@@ -49,17 +50,15 @@ class StatsCrud:
         last_entry_date = max(ended_on for _, ended_on in rows)
 
         return StreakOut(
-            current_streak= current_streak,
+            current_streak=current_streak,
             longest_streak=longest_streak,
-            last_entry_date=last_entry_date
+            last_entry_date=last_entry_date,
         )
-      
+
     async def get_year_summary(self, user_id: int, year: int) -> YearSummaryOut:
         month = func.extract("month", Entry.entry_date).label("month")
         words = func.coalesce(
-            func.sum(
-                func.array_length(func.string_to_array(Entry.content, " "), 1)
-            ),
+            func.sum(func.array_length(func.string_to_array(Entry.content, " "), 1)),
             0,
         ).label("words")
 

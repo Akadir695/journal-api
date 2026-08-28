@@ -1,6 +1,8 @@
 from datetime import date, datetime
 
 from pydantic import BaseModel
+
+
 class StreakOut(BaseModel):
     current_streak: int
     longest_streak: int

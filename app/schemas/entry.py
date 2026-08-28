@@ -3,6 +3,7 @@ from datetime import date, datetime
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from app.schemas.tag import TagRead
 
+
 class EntryCreate(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     content: str = Field(min_length=1, max_length=2000)
@@ -29,16 +30,17 @@ class EntryRead(BaseModel):
     created_at: datetime
     tags: list[TagRead] = []
 
+
 class Page[T](BaseModel):
     items: list[T]
     total: int
     page: int
-    size: int     
+    size: int
+
+
 class EntryUpdate(BaseModel):
     title: str | None = None
     content: str | None = None
     mood: int | None = None
     entry_date: date | None = None
     tags: list[str] | None = None
-
-                    

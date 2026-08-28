@@ -31,9 +31,10 @@ async def register(
     data: UserCreate,
     crud: Annotated[UserCrud, Depends(get_user_crud)],
 ) -> UserRead:
-    existing = await crud.get_by_email(data.email)
-    if existing is not None:
+    if await crud.get_by_email(data.email) is not None:
         raise ConflictError("Email already registered")
+    if await crud.get_by_username(data.username) is not None:
+        raise ConflictError("Username already taken")
     return await crud.create(data)
 
 

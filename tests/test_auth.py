@@ -162,3 +162,16 @@ async def test_refresh_after_logout_returns_401(client):
     )
 
     assert response.status_code == 401
+
+
+async def test_register_duplicate_username_returns_409(client):
+    await client.post(
+        "/api/v1/auth/register",
+        json={"username": "akadir", "email": "new@test.com", "password": "password123"},
+    )
+    response = await client.post(
+        "/api/v1/auth/register",
+        json={"username": "akadir", "email": "new@test123.com", "password": "password123"},
+    )
+    assert response.status_code == 409
+    assert "sername" in response.json()["detail"]

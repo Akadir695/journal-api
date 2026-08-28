@@ -9,6 +9,7 @@ from sqlalchemy import select, update, func
 from datetime import datetime, timezone, date
 from app.db.models.tag import Tag
 
+
 class EntryCrud:
     def __init__(self) -> None:
         self._entries: dict[int, EntryRead] = {}
@@ -39,15 +40,16 @@ class EntryCrud:
             return True
         return False
 
+
 SORTABLE = {"date": Entry.entry_date, "mood": Entry.mood}
+
 
 class SqlEntryCrud:
     def __init__(self, db: AsyncSession) -> None:
         self._db = db
+
     def base_query(self, user_id: int):
-         return select(Entry).where(Entry.user_id == 
-            user_id, Entry.deleted_at.is_(None))
-   
+        return select(Entry).where(Entry.user_id == user_id, Entry.deleted_at.is_(None))
 
     async def create(self, data: EntryCreate, user_id: int) -> EntryRead:
         entry = Entry(
@@ -64,18 +66,24 @@ class SqlEntryCrud:
         return EntryRead.model_validate(entry)
 
     async def get(self, entry_id: int, user_id: int) -> EntryRead | None:
-        result = await self._db.execute(
-            self.base_query(user_id).where(Entry.id == entry_id)
-        )
+        result = await self._db.execute(self.base_query(user_id).where(Entry.id == entry_id))
         entry = result.scalar_one_or_none()
         if entry is None:
             return None
         return EntryRead.model_validate(entry)
 
-    async def list_all(self, user_id: int,  page: int, size: int, mood: 
-        int | None = None, 
-        date_from: date | None = None, date_to: date | None = None, sort: str = "date", q: str | None = None) -> Page[EntryRead]:  
-              
+    async def list_all(
+        self,
+        user_id: int,
+        page: int,
+        size: int,
+        mood: int | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        sort: str = "date",
+        q: str | None = None,
+    ) -> Page[EntryRead]:
+
         query = self.base_query(user_id)
         if mood is not None:
             query = query.where(Entry.mood == mood)
@@ -87,9 +95,7 @@ class SqlEntryCrud:
             query = query.where(Entry.entry_date >= date_from)
         if date_to is not None:
             query = query.where(Entry.entry_date <= date_to)
-        count_result = await self._db.execute(
-            select(func.count()).select_from(query.subquery())
-        )
+        count_result = await self._db.execute(select(func.count()).select_from(query.subquery()))
         total = count_result.scalar_one()
         result = await self._db.execute(
             query.limit(size).offset((page - 1) * size).order_by(SORTABLE[sort].desc())
@@ -99,7 +105,7 @@ class SqlEntryCrud:
         for e in entries:
             results.append(EntryRead.model_validate(e))
         return Page(items=results, total=total, page=page, size=size)
-    
+
     async def update(self, entry_id: int, user_id: int, data: EntryUpdate) -> EntryRead | None:
         stmt = select(Entry).where(
             Entry.id == entry_id,
@@ -116,24 +122,26 @@ class SqlEntryCrud:
         await self._db.commit()
         await self._db.refresh(entry)
         return EntryRead.model_validate(entry)
+
     async def delete(self, entry_id: int, user_id: int) -> bool:
         result = await self._db.execute(
-        update(Entry)
-             .where(Entry.id == entry_id, Entry.user_id == user_id, Entry.deleted_at.is_(None))
+            update(Entry)
+            .where(Entry.id == entry_id, Entry.user_id == user_id, Entry.deleted_at.is_(None))
             .values(deleted_at=datetime.now(timezone.utc))
         )
-        
+
         await self._db.commit()
         return result.rowcount > 0
+
     async def restore(self, entry_id: int, user_id: int) -> bool:
         result = await self._db.execute(
-        update(Entry)
-             .where(Entry.id == entry_id, Entry.user_id == user_id, Entry.deleted_at.is_not(None))
+            update(Entry)
+            .where(Entry.id == entry_id, Entry.user_id == user_id, Entry.deleted_at.is_not(None))
             .values(deleted_at=None)
         )
         await self._db.commit()
         return result.rowcount > 0
-         
+
     async def _get_or_create_tags(self, names: list[str], user_id: int) -> list[Tag]:
         if not names:
             return []
@@ -152,4 +160,3 @@ class SqlEntryCrud:
         for tag in new_tags:
             self._db.add(tag)
         return list(existing) + new_tags
-        

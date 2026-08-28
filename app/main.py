@@ -28,6 +28,7 @@ app.include_router(api_router, prefix="/api/v1")
 @app.middleware("http")
 async def logging_middleware(request: Request, call_next):
     request_id = str(uuid4())
+    request.state.request_id = request_id
     structlog.contextvars.bind_contextvars(request_id=request_id)
     start = time.perf_counter()
 
