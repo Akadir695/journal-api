@@ -1,5 +1,13 @@
 from app.core.security import create_access_token
+import jwt
+from datetime import UTC, datetime, timedelta
 
+from app.core.config import get_settings
+from sqlalchemy import select
+
+from app.db.models.user import User
+
+settings = get_settings()
 
 async def test_register_returns_201(client):
     response = await client.post(
@@ -175,3 +183,32 @@ async def test_register_duplicate_username_returns_409(client):
     )
     assert response.status_code == 409
     assert "sername" in response.json()["detail"]
+
+
+async def test_token_for_missing_user_returns_401(client):
+    token =create_access_token("999999", 15)
+    client.headers["Authorization"] = f"Bearer {token}"
+
+    response = await client.get("/api/v1/users/me")
+
+    assert response.status_code == 401
+    
+async def test_token_without_sub_returns_401(client):
+    token =create_access_token("999999", 15)
+    client.headers["Authorization"] = f"Bearer {token}"
+
+    response = await client.get("/api/v1/users/me")
+
+    assert response.status_code == 401
+    
+async def test_inactive_user_returns_401(auth_client, session):
+    result = await session.execute(select(User).where(User.email == "tester@test.com"))
+    user = result.scalar_one()
+    user.is_active = False
+    await session.commit()
+  
+
+    response = await auth_client.get("/api/v1/users/me")
+
+    assert response.status_code == 401
+    assert response.status_code == 401
