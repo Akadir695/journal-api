@@ -328,3 +328,84 @@ async def test_other_user_list_is_empty(auth_client, other_client):
 
     response = await other_client.get("/api/v1/entries")
     assert response.json()["total"] == 0
+
+
+async def test_create_entry_with_tag_attaches_it(auth_client):
+    response = await auth_client.post(
+        "/api/v1/entries",
+        json={
+            "title": "x",
+            "content": "y",
+            "mood": 3,
+            "entry_date": "2026-08-24",
+            "tags": ["work"],
+        },
+    )
+
+    assert response.status_code == 201
+    assert len(response.json()["tags"]) == 1
+    assert response.json()["tags"][0]["name"] == "work"
+
+
+
+async def test_other_user_cannot_see_tags(auth_client, other_client):
+    await auth_client.post(
+        "/api/v1/entries",
+        json={
+            "title": "x",
+            "content": "y",
+            "mood": 3,
+            "entry_date": "2026-08-24",
+            "tags": ["work"],
+        },
+    )
+    response = await other_client.get('/api/v1/tags')
+    assert response.status_code == 200
+    assert response.json() == []
+
+async def test_same_tag_name_allowed_for_different_user(auth_client, other_client):
+    await auth_client.post(
+        "/api/v1/entries",
+        json={
+            "title": "x",
+            "content": "y",
+            "mood": 3,
+            "entry_date": "2026-08-24",
+            "tags": ["work"],
+        },
+    )
+    await other_client.post(
+        "/api/v1/entries",
+        json={
+            "title": "x",
+            "content": "y",
+            "mood": 3,
+            "entry_date": "2026-08-24",
+            "tags": ["work"],
+        },
+    )
+
+    response = await other_client.get("/api/v1/tags")
+
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+    assert response.json()[0]["name"] == "work"
+
+
+async def test_deleting_tag_does_not_delete_entry(auth_client):
+    created = await auth_client.post(
+        "/api/v1/entries",
+        json={
+            "title": "x",
+            "content": "y",
+            "mood": 3,
+            "entry_date": "2026-08-24",
+            "tags": ["work"],
+        },
+    )
+    entry_id = created.json()["id"]
+    tag_id = created.json()["tags"][0]["id"]
+    await auth_client.delete(f"/api/v1/tags/{tag_id}")
+    response = await auth_client.get(f"/api/v1/entries/{entry_id}")
+    assert response.status_code == 200
+

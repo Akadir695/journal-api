@@ -35,6 +35,7 @@ addopts = "--cov=app --cov-report=term-missing"
 [tool.coverage.run]
 source = ["app"]
 branch = true
+concurrency = ["greenlet", "thread"]
 
 [tool.coverage.report]
 skip_covered = true
@@ -54,3 +55,4 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.mypy]
 python_version = "3.12"
 disallow_untyped_defs = true
+addopts = "--cov=app --cov-report=term-missing --cov-fail-under=85"

@@ -1,3 +1,4 @@
+from app.crud.user import UserCrud
 async def test_not_found_returns_problem_details(auth_client):
     response = await auth_client.get("/api/v1/entries/999999")
     body = response.json()
@@ -29,3 +30,24 @@ async def test_validation_error_returns_flat_errors(client):
     assert "errors" in body
     assert body["errors"][0]["field"] == "email"
     assert "message" in body["errors"][0]
+
+
+from app.crud.user import UserCrud
+
+
+async def test_unhandled_error_returns_problem_details(error_client, monkeypatch):
+    async def boom(*args, **kwargs):
+        raise RuntimeError("database exploded")
+
+    monkeypatch.setattr(UserCrud, "get_by_email", boom)
+
+    response = await error_client.post(
+        "/api/v1/auth/register",
+        json={"username": "tester", "email": "x@test.com", "password": "password123"},
+    )
+
+    assert response.status_code == 500
+    body = response.json()
+    assert body["status"] == 500
+    assert "request_id" in body
+    assert "database exploded" not in str(body)

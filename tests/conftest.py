@@ -79,3 +79,11 @@ async def other_client(session):
         c.headers["Authorization"] = f"Bearer {login.json()['access_token']}"
         yield c
     app.dependency_overrides.clear()
+
+@pytest_asyncio.fixture
+async def error_client(session):
+    app.dependency_overrides[get_db] = lambda: session
+    transport = ASGITransport(app=app, raise_app_exceptions=False)
+    async with AsyncClient(transport=transport, base_url="http://test") as c:
+        yield c
+    app.dependency_overrides.clear()
