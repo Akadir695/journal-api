@@ -347,7 +347,6 @@ async def test_create_entry_with_tag_attaches_it(auth_client):
     assert response.json()["tags"][0]["name"] == "work"
 
 
-
 async def test_other_user_cannot_see_tags(auth_client, other_client):
     await auth_client.post(
         "/api/v1/entries",
@@ -359,9 +358,10 @@ async def test_other_user_cannot_see_tags(auth_client, other_client):
             "tags": ["work"],
         },
     )
-    response = await other_client.get('/api/v1/tags')
+    response = await other_client.get("/api/v1/tags")
     assert response.status_code == 200
     assert response.json() == []
+
 
 async def test_same_tag_name_allowed_for_different_user(auth_client, other_client):
     await auth_client.post(
@@ -408,4 +408,3 @@ async def test_deleting_tag_does_not_delete_entry(auth_client):
     await auth_client.delete(f"/api/v1/tags/{tag_id}")
     response = await auth_client.get(f"/api/v1/entries/{entry_id}")
     assert response.status_code == 200
-

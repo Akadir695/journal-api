@@ -9,6 +9,12 @@ from app.core.exceptions import UnauthorizedError
 from app.core.security import decode_access_token
 from app.db.models.user import User
 from app.db.session import get_db
+from fastapi import Depends, Request
+
+
+def get_redis(request: Request):
+    return request.app.state.redis
+
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 

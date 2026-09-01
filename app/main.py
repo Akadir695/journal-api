@@ -16,12 +16,10 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 
-
 logger = structlog.get_logger()
 
 settings = get_settings()
 configure_logging(settings.environment)
-
 
 
 @asynccontextmanager
@@ -30,6 +28,7 @@ async def lifespan(app: FastAPI):
     await app.state.redis.ping()
     yield
     await app.state.redis.aclose()
+
 
 app = FastAPI(
     title=settings.app_name,
@@ -63,6 +62,8 @@ async def logging_middleware(request: Request, call_next):
 
     response.headers["X-Request-ID"] = request_id
     return response
+
+
 # rate limiter middleware
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
@@ -95,7 +96,8 @@ async def rate_limit_middleware(request: Request, call_next):
     response.headers["X-RateLimit-Limit"] = str(limit)
     response.headers["X-RateLimit-Remaining"] = str(remaining)
     return response
-    
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -104,6 +106,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 MAX_BODY_BYTES = 1_000_000  # 1 MB
+
 
 @app.middleware("http")
 async def body_size_middleware(request: Request, call_next):
@@ -121,6 +124,8 @@ async def body_size_middleware(request: Request, call_next):
             },
         )
     return await call_next(request)
+
+
 @app.middleware("http")
 async def security_headers_middleware(request: Request, call_next):
     response = await call_next(request)
@@ -128,10 +133,10 @@ async def security_headers_middleware(request: Request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
     if settings.environment == "production":
-        response.headers["Strict-Transport-Security"] = (
-            "max-age=31536000; includeSubDomains"
-        )
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
+
+
 @app.get("/health")
 async def root() -> dict[str, str]:
     return {"status": "ok"}

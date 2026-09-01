@@ -12,14 +12,15 @@ async def test_rate_limit_returns_429(client):
 
     assert response.status_code == 429
     assert "Retry-After" in response.headers
-    
+
 
 async def test_rate_limit_headers_present(client):
     response = await client.get("/health")
 
     assert "X-RateLimit-Limit" in response.headers
     assert "X-RateLimit-Remaining" in response.headers
-    
+
+
 async def test_security_headers_present(client):
     response = await client.get("/health")
 

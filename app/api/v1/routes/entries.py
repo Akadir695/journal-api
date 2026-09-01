@@ -1,16 +1,17 @@
-from typing import Annotated
+from datetime import date
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_user, get_redis
+from app.core.cache import cache_delete_user_stats
 from app.core.exceptions import NotFoundError
 from app.crud.entry import SqlEntryCrud
-from app.db.session import get_db
-from app.schemas.entry import EntryCreate, EntryRead, Page, EntryUpdate
-from app.api.deps import get_current_user
 from app.db.models.user import User
-from datetime import date
-from typing import Literal
+from app.db.session import get_db
+from app.schemas.entry import EntryCreate, EntryRead, EntryUpdate, Page
 
 
 def get_crud(db: Annotated[AsyncSession, Depends(get_db)]) -> SqlEntryCrud:
@@ -25,8 +26,11 @@ async def create_entry(
     entry: EntryCreate,
     crud: Annotated[SqlEntryCrud, Depends(get_crud)],
     current_user: Annotated[User, Depends(get_current_user)],
+    redis: Annotated[Redis, Depends(get_redis)],
 ) -> EntryRead:
-    return await crud.create(entry, current_user.id)
+    created = await crud.create(entry, current_user.id)
+    await cache_delete_user_stats(redis, current_user.id)
+    return created
 
 
 @router.get("/entries/{entry_id}")
@@ -63,11 +67,13 @@ async def update_entry(
     entry_id: int,
     data: EntryUpdate,
     current_user: Annotated[User, Depends(get_current_user)],
+    redis: Annotated[Redis, Depends(get_redis)],
     crud: Annotated[SqlEntryCrud, Depends(get_crud)],
 ) -> EntryRead:
     entry = await crud.update(entry_id, current_user.id, data)
     if entry is None:
         raise NotFoundError("Entry not found")
+    await cache_delete_user_stats(redis, current_user.id)
     return entry
 
 
@@ -76,9 +82,11 @@ async def delete_entry(
     entry_id: int,
     crud: Annotated[SqlEntryCrud, Depends(get_crud)],
     current_user: Annotated[User, Depends(get_current_user)],
+    redis: Annotated[Redis, Depends(get_redis)],
 ) -> None:
     if not await crud.delete(entry_id, current_user.id):
         raise NotFoundError("Entry not found")
+    await cache_delete_user_stats(redis, current_user.id)
 
 
 @router.post("/entries/{entry_id}/restore", status_code=204)
@@ -86,6 +94,8 @@ async def restore(
     entry_id: int,
     crud: Annotated[SqlEntryCrud, Depends(get_crud)],
     current_user: Annotated[User, Depends(get_current_user)],
+    redis: Annotated[Redis, Depends(get_redis)],
 ) -> None:
     if not await crud.restore(entry_id, current_user.id):
         raise NotFoundError("Entry not found")
+    await cache_delete_user_stats(redis, current_user.id)

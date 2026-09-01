@@ -1,6 +1,8 @@
 from app.core import rate_limit
 
 from app.crud.user import UserCrud
+
+
 async def test_not_found_returns_problem_details(auth_client):
     response = await auth_client.get("/api/v1/entries/999999")
     body = response.json()
@@ -32,8 +34,6 @@ async def test_validation_error_returns_flat_errors(client):
     assert "errors" in body
     assert body["errors"][0]["field"] == "email"
     assert "message" in body["errors"][0]
-
-
 
 
 async def test_unhandled_error_returns_problem_details(error_client, monkeypatch):

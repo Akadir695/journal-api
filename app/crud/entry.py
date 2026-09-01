@@ -10,8 +10,6 @@ from datetime import datetime, timezone, date
 from app.db.models.tag import Tag
 
 
-
-    
 SORTABLE = {"date": Entry.entry_date, "mood": Entry.mood}
 
 

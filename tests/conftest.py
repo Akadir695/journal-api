@@ -81,6 +81,7 @@ async def other_client(session):
         yield c
     app.dependency_overrides.clear()
 
+
 @pytest_asyncio.fixture
 async def error_client(session):
     app.dependency_overrides[get_db] = lambda: session
@@ -88,6 +89,7 @@ async def error_client(session):
     async with AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
     app.dependency_overrides.clear()
+
 
 @pytest_asyncio.fixture(autouse=True)
 async def redis_client():
