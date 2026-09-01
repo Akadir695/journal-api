@@ -7,6 +7,7 @@ from app.core.config import get_settings
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
+from redis.asyncio import Redis
 
 settings = get_settings()
 
@@ -87,3 +88,11 @@ async def error_client(session):
     async with AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
     app.dependency_overrides.clear()
+
+@pytest_asyncio.fixture(autouse=True)
+async def redis_client():
+    client = Redis.from_url(settings.test_redis_url, decode_responses=True)
+    await client.flushdb()
+    app.state.redis = client
+    yield client
+    await client.aclose()

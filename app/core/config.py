@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 30
+    redis_url: str = "redis://localhost:6379/0"
+    cors_origins: list[str] = ["http://localhost:3000"]
+    test_redis_url: str = "redis://localhost:6379/15"
+ 
 
 
 @lru_cache

@@ -2,12 +2,20 @@ import time
 from uuid import uuid4
 
 import structlog
+from contextlib import asynccontextmanager
+
+from redis.asyncio import Redis
 from fastapi import FastAPI, Request
 
 from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.handlers import register_exception_handlers
 from app.core.logging import configure_logging
+from app.core.rate_limit import check_rate_limit
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+
+
 
 logger = structlog.get_logger()
 
@@ -15,10 +23,19 @@ settings = get_settings()
 configure_logging(settings.environment)
 
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state.redis = Redis.from_url(settings.redis_url, decode_responses=True)
+    await app.state.redis.ping()
+    yield
+    await app.state.redis.aclose()
+
 app = FastAPI(
     title=settings.app_name,
     description=settings.app_description,
     version=settings.app_version,
+    lifespan=lifespan,
 )
 register_exception_handlers(app)
 app.include_router(api_router, prefix="/api/v1")
@@ -46,8 +63,75 @@ async def logging_middleware(request: Request, call_next):
 
     response.headers["X-Request-ID"] = request_id
     return response
+# rate limiter middleware
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    ip = request.client.host
+    if request.url.path.startswith("/api/v1/auth"):
+        limit = 5
+        key = f"ratelimit:auth:{ip}"
+    else:
+        limit = 100
+        key = f"ratelimit:{ip}"
+    allowed, remaining = await check_rate_limit(request.app.state.redis, key, limit, 60)
+    if not allowed:
+        return JSONResponse(
+            status_code=429,
+            media_type="application/problem+json",
+            content={
+                "type": "about:blank",
+                "title": "Too many requests",
+                "status": 429,
+                "detail": "Rate limit exceeded. Try again shortly.",
+                "instance": request.url.path,
+            },
+            headers={
+                "Retry-After": "60",
+                "X-RateLimit-Limit": str(limit),
+                "X-RateLimit-Remaining": "0",
+            },
+        )
+    response = await call_next(request)
+    response.headers["X-RateLimit-Limit"] = str(limit)
+    response.headers["X-RateLimit-Remaining"] = str(remaining)
+    return response
+    
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+MAX_BODY_BYTES = 1_000_000  # 1 MB
 
-
+@app.middleware("http")
+async def body_size_middleware(request: Request, call_next):
+    content_length = request.headers.get("content-length")
+    if content_length and int(content_length) > MAX_BODY_BYTES:
+        return JSONResponse(
+            status_code=413,
+            media_type="application/problem+json",
+            content={
+                "type": "about:blank",
+                "title": "Payload too large",
+                "status": 413,
+                "detail": "Request body exceeds the maximum allowed size.",
+                "instance": request.url.path,
+            },
+        )
+    return await call_next(request)
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    if settings.environment == "production":
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=31536000; includeSubDomains"
+        )
+    return response
 @app.get("/health")
 async def root() -> dict[str, str]:
     return {"status": "ok"}
