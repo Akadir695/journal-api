@@ -98,3 +98,18 @@ async def redis_client():
     app.state.redis = client
     yield client
     await client.aclose()
+
+
+class FakeArq:
+    def __init__(self):
+        self.jobs = []
+
+    async def enqueue_job(self, name, *args):
+        self.jobs.append((name, args))
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def arq_client():
+    fake = FakeArq()
+    app.state.arq = fake
+    yield fake

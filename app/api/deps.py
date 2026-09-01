@@ -16,6 +16,10 @@ def get_redis(request: Request):
     return request.app.state.redis
 
 
+def get_arq(request: Request):
+    return request.app.state.arq
+
+
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 

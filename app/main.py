@@ -14,6 +14,8 @@ from app.core.logging import configure_logging
 from app.core.rate_limit import check_rate_limit
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from arq import create_pool
+from arq.connections import RedisSettings
 
 
 logger = structlog.get_logger()
@@ -26,8 +28,10 @@ configure_logging(settings.environment)
 async def lifespan(app: FastAPI):
     app.state.redis = Redis.from_url(settings.redis_url, decode_responses=True)
     await app.state.redis.ping()
+    app.state.arq = await create_pool(RedisSettings.from_dsn(settings.redis_url))
     yield
     await app.state.redis.aclose()
+    await app.state.arq.aclose()
 
 
 app = FastAPI(

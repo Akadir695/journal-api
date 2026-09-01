@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:3000"]
     test_redis_url: str = "redis://localhost:6379/15"
     cache_ttl_seconds: int = 300
+    export_dir: str = "exports"
 
 
 @lru_cache
