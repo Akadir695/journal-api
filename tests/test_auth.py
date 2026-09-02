@@ -298,3 +298,18 @@ async def test_summary_is_scoped_per_user(auth_client, other_client):
     body = response.json()
     assert body["total_entries"] == 0
     assert len(body["months"]) == 12
+
+
+async def test_verification_token_is_single_use(client, arq_client):
+    await client.post(
+        "/api/v1/auth/register",
+        json={"username": "newuser", "email": "new@test.com", "password": "password123"},
+    )
+
+    _, args = arq_client.jobs[0]
+    token = args[1]
+
+    first = await client.post("/api/v1/auth/verify-email", json={"token": token})
+    second = await client.post("/api/v1/auth/verify-email", json={"token": token})
+    assert first.status_code == 204
+    assert second.status_code == 401

@@ -12,7 +12,23 @@ from app.crud.refresh_token import RefreshTokenCrud
 from app.crud.user import UserCrud
 from app.db.session import get_db
 from app.schemas.user import RefreshRequest, Token, UserCreate, UserRead
+from app.crud.one_time_token import consume_token
+from app.schemas.user import RefreshRequest, Token, UserCreate, UserRead, VerifyEmailRequest
+from app.db.models.user import User
+from app.core.security import hash_password
+from arq import ArqRedis
 
+from app.api.deps import get_arq
+from app.crud.one_time_token import consume_token, create_token
+from app.schemas.user import (
+    ForgotPasswordRequest,
+    RefreshRequest,
+    Token,
+    UserCreate,
+    UserRead,
+    VerifyEmailRequest,
+    ResetPasswordRequest
+)
 settings = get_settings()
 
 router = APIRouter()
@@ -30,12 +46,18 @@ def get_refresh_crud(db: Annotated[AsyncSession, Depends(get_db)]) -> RefreshTok
 async def register(
     data: UserCreate,
     crud: Annotated[UserCrud, Depends(get_user_crud)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    arq: Annotated[ArqRedis, Depends(get_arq)],
 ) -> UserRead:
     if await crud.get_by_email(data.email) is not None:
         raise ConflictError("Email already registered")
     if await crud.get_by_username(data.username) is not None:
         raise ConflictError("Username already taken")
-    return await crud.create(data)
+
+    created = await crud.create(data)
+    token = await create_token(db, created.id, "verify_email", ttl_minutes=1440)
+    await arq.enqueue_job("send_verification_email", created.email, token)
+    return created
 
 
 @router.post("/auth/login")
@@ -89,3 +111,45 @@ async def logout(
     row = await tokens.get_by_token(data.refresh_token)
     if row is not None and row.revoked_at is None:
         await tokens.revoke(row)
+
+
+@router.post("/auth/verify-email", status_code=204)
+async def verify_email(
+    data: VerifyEmailRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> None:
+    user_id = await consume_token(db, data.token, "verify_email")
+    if user_id is None:
+        raise UnauthorizedError("Invalid or expired token")
+
+    user = await db.get(User, user_id)
+    user.is_verified = True
+    await db.commit()
+
+@router.post("/auth/forgot-password", status_code=202)
+async def forgot_password(
+    data: ForgotPasswordRequest,
+    crud: Annotated[UserCrud, Depends(get_user_crud)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    arq: Annotated[ArqRedis, Depends(get_arq)],
+) -> None:
+    user = await crud.get_by_email(data.email)
+    if user is not None:
+        token = await create_token(db, user.id, "reset_password", ttl_minutes=30)
+        await arq.enqueue_job("send_password_reset_email", user.email, token)
+
+@router.post("/auth/reset-password", status_code=204)
+async def reset_password(
+    data: ResetPasswordRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    tokens: Annotated[RefreshTokenCrud, Depends(get_refresh_crud)],
+) -> None:
+    user_id = await consume_token(db, data.token, "reset_password")
+    if user_id is None:
+        raise UnauthorizedError("Invalid or expired token")
+
+    user = await db.get(User, user_id)
+    user.hashed_password = hash_password(data.new_password)
+    await db.commit()
+
+    await tokens.revoke_all_for_user(user_id)

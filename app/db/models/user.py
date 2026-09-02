@@ -14,3 +14,4 @@ class User(Base):
     is_active: Mapped[bool] = mapped_column(default=True)
     hashed_password: Mapped[str] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    is_verified: Mapped[bool] = mapped_column(default=False, server_default="false")

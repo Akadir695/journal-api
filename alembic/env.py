@@ -14,6 +14,7 @@ from app.db.models.user import User
 from app.db.models.tag import Tag
 from app.db.models.entry_tag import EntryTag
 from app.db.models.export import Export
+from app.db.models.one_time_token import OneTimeToken
 
 __all__ = ["Entry", "RefreshToken", "User"]
 

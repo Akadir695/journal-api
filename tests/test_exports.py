@@ -54,4 +54,4 @@ async def test_create_export_returns_202(auth_client, arq_client):
 
     assert response.status_code == 202
     assert response.json()["status"] == "pending"
-    assert arq_client.jobs[0][0] == "export_entries"
+    assert any(name == "export_entries" for name, _ in arq_client.jobs)
