@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     test_redis_url: str = "redis://localhost:6379/15"
     cache_ttl_seconds: int = 300
     export_dir: str = "exports"
+    azure_storage_connection_string: str
+    azure_storage_container: str = "attachments"
 
 
 @lru_cache

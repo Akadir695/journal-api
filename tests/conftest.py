@@ -8,6 +8,9 @@ from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
 from redis.asyncio import Redis
+from app.api.deps import get_storage
+from app.core.storage import BlobProperties
+import pytest
 
 settings = get_settings()
 
@@ -108,8 +111,44 @@ class FakeArq:
         self.jobs.append((name, args))
 
 
+
+
 @pytest_asyncio.fixture(autouse=True)
 async def arq_client():
     fake = FakeArq()
     app.state.arq = fake
     yield fake
+
+
+@pytest.fixture
+def storage():
+    fake = FakeStorage()
+    app.dependency_overrides[get_storage] = lambda: fake
+    yield fake
+    app.dependency_overrides.pop(get_storage, None)
+
+class FakeStorage:
+    def __init__(self) -> None:
+        self.blobs: dict[str, BlobProperties] = {}
+        self.deleted: list[str] = []
+
+    def upload_url(self, path: str, content_type: str, expires_in: int) -> str:
+        return f"https://fake.blob/{path}?sig=upload"
+
+    def read_url(self, path: str, expires_in: int) -> str:
+        return f"https://fake.blob/{path}?sig=read"
+
+    async def get_properties(self, path: str) -> BlobProperties | None:
+        return self.blobs.get(path)
+
+    async def delete(self, path: str) -> None:
+        self.blobs.pop(path, None)
+        self.deleted.append(path)
+
+
+@pytest.fixture
+def storage():
+    fake = FakeStorage()
+    app.dependency_overrides[get_storage] = lambda: fake
+    yield fake
+    app.dependency_overrides.pop(get_storage, None)

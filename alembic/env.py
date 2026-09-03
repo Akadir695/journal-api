@@ -15,6 +15,7 @@ from app.db.models.tag import Tag
 from app.db.models.entry_tag import EntryTag
 from app.db.models.export import Export
 from app.db.models.one_time_token import OneTimeToken
+from app.db.models.attachment import Attachment
 
 __all__ = ["Entry", "RefreshToken", "User"]
 
@@ -49,7 +50,7 @@ def run_migrations_offline() -> None:
     we don't even need a DBAPI to be available.
 
     Calls to context.execute() here emit the given string to the
-    script output.
+    script output
 
     """
     url = config.get_main_option("sqlalchemy.url")

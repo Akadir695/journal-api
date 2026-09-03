@@ -1,16 +1,17 @@
+from functools import lru_cache
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, Request
 from fastapi.security import OAuth2PasswordBearer
 from jwt.exceptions import InvalidTokenError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.exceptions import UnauthorizedError
 from app.core.security import decode_access_token
+from app.core.storage import AzureBlobStorage, Storage
 from app.db.models.user import User
 from app.db.session import get_db
-from fastapi import Depends, Request
-
 
 def get_redis(request: Request):
     return request.app.state.redis
@@ -19,6 +20,18 @@ def get_redis(request: Request):
 def get_arq(request: Request):
     return request.app.state.arq
 
+from app.core.storage import AzureBlobStorage, Storage
+from app.core.config import get_settings
+
+
+
+@lru_cache
+def get_storage() -> Storage:
+    settings = get_settings()
+    return AzureBlobStorage(
+        settings.azure_storage_connection_string,
+        settings.azure_storage_container,
+    )
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
