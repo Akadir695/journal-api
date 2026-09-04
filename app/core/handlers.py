@@ -1,12 +1,12 @@
-import structlog
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
-
-from app.core.exceptions import AppError
 from http import HTTPStatus
 
-from starlette.exceptions import HTTPException as StarletteHTTPException
+import structlog
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from app.core.exceptions import AppError
 
 logger = structlog.get_logger()
 

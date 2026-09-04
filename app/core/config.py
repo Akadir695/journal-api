@@ -5,9 +5,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
-    app_name: str = "journal api"
+    app_name: str = "Journal API"
     app_version: str = "0.1.0"
-    app_description: str = "A private journaling API."
+    app_description: str = (
+        "A private journaling API. Entries with tags, moods and full-text search, "
+        "per-user statistics, background exports, and image attachments uploaded "
+        "directly to blob storage.\n\n"
+        "All endpoints require a verified account. Authenticate with "
+        "`POST /api/v1/auth/login` and send the access token as a bearer token."
+    )
     environment: str = "development"
     database_url: str
     test_database_url: str | None = None

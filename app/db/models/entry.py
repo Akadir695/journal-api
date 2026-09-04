@@ -1,11 +1,11 @@
 from datetime import date, datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Computed, DateTime, ForeignKey, Index, String, Text, func
 from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.db.models.tag import Tag
@@ -13,9 +13,7 @@ if TYPE_CHECKING:
 
 class Entry(Base):
     __tablename__ = "entries"
-    __table_args__ = (
-        Index("ix_entries_search_vector", "search_vector", postgresql_using="gin"),
-    )
+    __table_args__ = (Index("ix_entries_search_vector", "search_vector", postgresql_using="gin"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column(String(200))

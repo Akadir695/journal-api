@@ -1,34 +1,35 @@
 from datetime import UTC, datetime
 from typing import Annotated
 
+from arq import ArqRedis
 from fastapi import APIRouter, Depends
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_arq
 from app.core.config import get_settings
 from app.core.exceptions import ConflictError, UnauthorizedError
-from app.core.security import create_access_token, create_refresh_token, verify_password
+from app.core.security import (
+    create_access_token,
+    create_refresh_token,
+    hash_password,
+    verify_password,
+)
+from app.crud.one_time_token import consume_token, create_token
 from app.crud.refresh_token import RefreshTokenCrud
 from app.crud.user import UserCrud
-from app.db.session import get_db
-from app.schemas.user import RefreshRequest, Token, UserCreate, UserRead
-from app.crud.one_time_token import consume_token
-from app.schemas.user import RefreshRequest, Token, UserCreate, UserRead, VerifyEmailRequest
 from app.db.models.user import User
-from app.core.security import hash_password
-from arq import ArqRedis
-
-from app.api.deps import get_arq
-from app.crud.one_time_token import consume_token, create_token
+from app.db.session import get_db
 from app.schemas.user import (
     ForgotPasswordRequest,
     RefreshRequest,
+    ResetPasswordRequest,
     Token,
     UserCreate,
     UserRead,
     VerifyEmailRequest,
-    ResetPasswordRequest
 )
+
 settings = get_settings()
 
 router = APIRouter()
@@ -42,13 +43,27 @@ def get_refresh_crud(db: Annotated[AsyncSession, Depends(get_db)]) -> RefreshTok
     return RefreshTokenCrud(db)
 
 
-@router.post("/auth/register", status_code=201)
+@router.post(
+    "/auth/register",
+    status_code=201,
+    summary="Register a new account",
+    response_description="The created user",
+    responses={
+        409: {"description": "Email already registered, or username taken"},
+        422: {"description": "Validation failed"},
+    },
+)
 async def register(
     data: UserCreate,
     crud: Annotated[UserCrud, Depends(get_user_crud)],
     db: Annotated[AsyncSession, Depends(get_db)],
     arq: Annotated[ArqRedis, Depends(get_arq)],
 ) -> UserRead:
+    """Create an account and send a verification email.
+
+    The verification email is queued in the background, so this returns before
+    it is sent. The link inside is valid for 24 hours.
+    """
     if await crud.get_by_email(data.email) is not None:
         raise ConflictError("Email already registered")
     if await crud.get_by_username(data.username) is not None:
@@ -60,12 +75,24 @@ async def register(
     return created
 
 
-@router.post("/auth/login")
+@router.post(
+    "/auth/login",
+    summary="Log in",
+    response_description="An access token and a refresh token",
+    responses={401: {"description": "Incorrect email or password"}},
+)
 async def login(
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     crud: Annotated[UserCrud, Depends(get_user_crud)],
     tokens: Annotated[RefreshTokenCrud, Depends(get_refresh_crud)],
 ) -> Token:
+    """Exchange email and password for a token pair.
+
+    Send credentials as form data, not JSON — this follows the OAuth2 password
+    flow, so the email goes in the `username` field.
+
+    The access token is short-lived; use the refresh token to get a new one.
+    """
     user = await crud.get_by_email(form_data.username)
     if user is None or not verify_password(form_data.password, user.hashed_password):
         raise UnauthorizedError("Incorrect email or password")
@@ -77,11 +104,25 @@ async def login(
     return Token(access_token=access, refresh_token=refresh)
 
 
-@router.post("/auth/refresh")
+@router.post(
+    "/auth/refresh",
+    summary="Exchange a refresh token for a new pair",
+    response_description="A new access token and a new refresh token",
+    responses={401: {"description": "Refresh token is invalid, expired, or already used"}},
+)
 async def refresh(
     data: RefreshRequest,
     tokens: Annotated[RefreshTokenCrud, Depends(get_refresh_crud)],
 ) -> Token:
+    """Rotate a refresh token.
+
+    Each refresh token can be used **once**. Using it returns a new pair and
+    revokes the old one.
+
+    If an already-revoked token is presented, every refresh token for that user
+    is revoked immediately — a reused token means it was probably stolen, so the
+    safe response is to log the account out everywhere.
+    """
     row = await tokens.get_by_token(data.refresh_token)
 
     if row is None:
@@ -103,21 +144,39 @@ async def refresh(
     return Token(access_token=access, refresh_token=new_refresh)
 
 
-@router.post("/auth/logout", status_code=204)
+@router.post(
+    "/auth/logout",
+    status_code=204,
+    summary="Revoke a refresh token",
+)
 async def logout(
     data: RefreshRequest,
     tokens: Annotated[RefreshTokenCrud, Depends(get_refresh_crud)],
 ) -> None:
+    """Revoke a refresh token.
+
+    Always returns 204, whether the token existed or not. Logging out twice is
+    not an error.
+    """
     row = await tokens.get_by_token(data.refresh_token)
     if row is not None and row.revoked_at is None:
         await tokens.revoke(row)
 
 
-@router.post("/auth/verify-email", status_code=204)
+@router.post(
+    "/auth/verify-email",
+    status_code=204,
+    summary="Verify an email address",
+    responses={401: {"description": "Token is invalid, expired, or already used"}},
+)
 async def verify_email(
     data: VerifyEmailRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:
+    """Confirm an email address using the token from the verification email.
+
+    Tokens are single-use and expire after 24 hours.
+    """
     user_id = await consume_token(db, data.token, "verify_email")
     if user_id is None:
         raise UnauthorizedError("Invalid or expired token")
@@ -126,24 +185,48 @@ async def verify_email(
     user.is_verified = True
     await db.commit()
 
-@router.post("/auth/forgot-password", status_code=202)
+
+@router.post(
+    "/auth/forgot-password",
+    status_code=202,
+    summary="Request a password reset email",
+)
 async def forgot_password(
     data: ForgotPasswordRequest,
     crud: Annotated[UserCrud, Depends(get_user_crud)],
     db: Annotated[AsyncSession, Depends(get_db)],
     arq: Annotated[ArqRedis, Depends(get_arq)],
 ) -> None:
+    """Send a password reset link, if the address belongs to an account.
+
+    Always returns 202, whether or not the email is registered. This is
+    deliberate — a different response for unknown addresses would let anyone
+    test which emails have accounts here.
+
+    The link is valid for 30 minutes.
+    """
     user = await crud.get_by_email(data.email)
     if user is not None:
         token = await create_token(db, user.id, "reset_password", ttl_minutes=30)
         await arq.enqueue_job("send_password_reset_email", user.email, token)
 
-@router.post("/auth/reset-password", status_code=204)
+
+@router.post(
+    "/auth/reset-password",
+    status_code=204,
+    summary="Set a new password using a reset token",
+    responses={401: {"description": "Token is invalid, expired, or already used"}},
+)
 async def reset_password(
     data: ResetPasswordRequest,
     db: Annotated[AsyncSession, Depends(get_db)],
     tokens: Annotated[RefreshTokenCrud, Depends(get_refresh_crud)],
 ) -> None:
+    """Set a new password.
+
+    Tokens are single-use and expire after 30 minutes. On success every refresh
+    token for the account is revoked, so any existing sessions are logged out.
+    """
     user_id = await consume_token(db, data.token, "reset_password")
     if user_id is None:
         raise UnauthorizedError("Invalid or expired token")

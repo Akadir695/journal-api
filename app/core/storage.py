@@ -1,11 +1,10 @@
-from datetime import datetime, timedelta, timezone
+import contextlib
+from datetime import UTC, datetime, timedelta
 from typing import NamedTuple, Protocol
 
 from azure.core.exceptions import ResourceNotFoundError
 from azure.storage.blob import BlobSasPermissions, generate_blob_sas
 from azure.storage.blob.aio import BlobServiceClient
-
-
 
 
 class BlobProperties(NamedTuple):
@@ -39,7 +38,7 @@ class AzureBlobStorage:
             blob_name=path,
             account_key=self._client.credential.account_key,
             permission=permission,
-            expiry=datetime.now(timezone.utc) + timedelta(seconds=expires_in),
+            expiry=datetime.now(UTC) + timedelta(seconds=expires_in),
         )
         return f"{self._client.get_blob_client(self._container, path).url}?{token}"
 
@@ -62,8 +61,5 @@ class AzureBlobStorage:
 
     async def delete(self, path: str) -> None:
         blob = self._client.get_blob_client(self._container, path)
-        try:
+        with contextlib.suppress(ResourceNotFoundError):
             await blob.delete_blob()
-        except ResourceNotFoundError:
-            pass
-

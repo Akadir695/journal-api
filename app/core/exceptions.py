@@ -26,3 +26,9 @@ class UnauthorizedError(AppError):
     status_code = 401
     title = "Unauthorized"
     type = "https://journal.api/errors/unauthorized"
+
+
+class ForbiddenError(AppError):
+    status_code = 403
+    title = "Forbidden"
+    type = "https://journal.api/errors/forbidden"

@@ -1,16 +1,14 @@
 import secrets
 from datetime import UTC, datetime, timedelta
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import hash_token
 from app.db.models.one_time_token import OneTimeToken
-from sqlalchemy import select
 
 
-async def create_token(
-    session: AsyncSession, user_id: int, purpose: str, ttl_minutes: int
-) -> str:
+async def create_token(session: AsyncSession, user_id: int, purpose: str, ttl_minutes: int) -> str:
     raw = secrets.token_urlsafe(32)
     token = OneTimeToken(
         user_id=user_id,
@@ -21,10 +19,9 @@ async def create_token(
     session.add(token)
     await session.commit()
     return raw
-  
-async def consume_token(
-    session: AsyncSession, raw: str, purpose: str
-) -> int | None:
+
+
+async def consume_token(session: AsyncSession, raw: str, purpose: str) -> int | None:
 
     token_hash = hash_token(raw)
 
@@ -45,4 +42,3 @@ async def consume_token(
     token.used_at = datetime.now(UTC)
     await session.commit()
     return token.user_id
-  

@@ -1,22 +1,28 @@
+import asyncio
 import time
+from contextlib import asynccontextmanager
+from typing import Annotated
 from uuid import uuid4
 
 import structlog
-from contextlib import asynccontextmanager
-
+from arq import create_pool
+from arq.connections import RedisSettings
+from fastapi import Depends, FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
-from fastapi import FastAPI, Request
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_redis
 from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.handlers import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.rate_limit import check_rate_limit
-from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
-from arq import create_pool
-from arq.connections import RedisSettings
+from app.db.session import get_db
 
+PROBE_TIMEOUT = 2.0
 
 logger = structlog.get_logger()
 
@@ -141,6 +147,43 @@ async def security_headers_middleware(request: Request, call_next):
     return response
 
 
-@app.get("/health")
-async def root() -> dict[str, str]:
+@app.get("/health", summary="Liveness probe", tags=["health"])
+async def health() -> dict[str, str]:
+    """Returns 200 whenever the process is running. Checks no dependencies.
+
+    Azure restarts the container if this fails, so it must never depend on
+    Postgres or Redis — a database blip would cause a restart loop.
+    """
     return {"status": "ok"}
+
+
+@app.get("/health/ready", summary="Readiness probe", tags=["health"])
+async def readiness(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    redis: Annotated[Redis, Depends(get_redis)],
+) -> JSONResponse:
+    """Returns 200 when this replica can serve requests, 503 when it cannot.
+
+    Azure stops sending traffic here on failure but does not restart the
+    container, so a dependency outage pauses this replica rather than
+    destroying it.
+    """
+    checks: dict[str, str] = {}
+
+    try:
+        await asyncio.wait_for(db.execute(text("SELECT 1")), PROBE_TIMEOUT)
+        checks["database"] = "ok"
+    except Exception:
+        checks["database"] = "unavailable"
+
+    try:
+        await asyncio.wait_for(redis.ping(), PROBE_TIMEOUT)
+        checks["redis"] = "ok"
+    except Exception:
+        checks["redis"] = "unavailable"
+
+    ready = all(status == "ok" for status in checks.values())
+    return JSONResponse(
+        status_code=200 if ready else 503,
+        content={"status": "ready" if ready else "not ready", "checks": checks},
+    )

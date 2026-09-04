@@ -1,16 +1,16 @@
+import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from app.api.deps import get_storage
 from app.core.config import get_settings
+from app.core.storage import BlobProperties
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
-from redis.asyncio import Redis
-from app.api.deps import get_storage
-from app.core.storage import BlobProperties
-import pytest
 
 settings = get_settings()
 
@@ -53,33 +53,55 @@ async def client(session):
 
 
 @pytest_asyncio.fixture
-async def auth_client(client):
-    await client.post(
+async def auth_client(client, arq_client):
+    r = await client.post(
         "/api/v1/auth/register",
-        json={"username": "tester", "email": "tester@test.com", "password": "password123"},
+        json={
+            "username": "tester",
+            "email": "tester@test.com",
+            "password": "password123",
+        },
     )
+    assert r.status_code == 201, r.text
+
+    _, args = arq_client.jobs[-1]
+    await client.post("/api/v1/auth/verify-email", json={"token": args[1]})
+
     response = await client.post(
         "/api/v1/auth/login",
         data={"username": "tester@test.com", "password": "password123"},
     )
+    assert response.status_code == 200, response.text
+
     client.headers["Authorization"] = f"Bearer {response.json()['access_token']}"
     return client
 
 
-# another client
 @pytest_asyncio.fixture
-async def other_client(session):
+async def other_client(session, arq_client):
     app.dependency_overrides[get_db] = lambda: session
-    transport = ASGITransport(app=app)
+    transport = ASGITransport(app=app, client=("10.0.0.2", 123))
     async with AsyncClient(transport=transport, base_url="http://test") as c:
-        await c.post(
+        r = await c.post(
             "/api/v1/auth/register",
-            json={"username": "other", "email": "other@test.com", "password": "password123"},
+            json={
+                "username": "other",
+                "email": "other@test.com",
+                "password": "password123",
+            },
         )
+        assert r.status_code == 201, r.text
+
+        _, args = arq_client.jobs[-1]
+        v = await c.post("/api/v1/auth/verify-email", json={"token": args[1]})
+        assert v.status_code == 204, v.text
+
         login = await c.post(
             "/api/v1/auth/login",
             data={"username": "other@test.com", "password": "password123"},
         )
+        assert login.status_code == 200, login.text
+
         c.headers["Authorization"] = f"Bearer {login.json()['access_token']}"
         yield c
     app.dependency_overrides.clear()
@@ -111,21 +133,12 @@ class FakeArq:
         self.jobs.append((name, args))
 
 
-
-
 @pytest_asyncio.fixture(autouse=True)
 async def arq_client():
     fake = FakeArq()
     app.state.arq = fake
     yield fake
 
-
-@pytest.fixture
-def storage():
-    fake = FakeStorage()
-    app.dependency_overrides[get_storage] = lambda: fake
-    yield fake
-    app.dependency_overrides.pop(get_storage, None)
 
 class FakeStorage:
     def __init__(self) -> None:

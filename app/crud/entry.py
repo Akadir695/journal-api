@@ -1,14 +1,11 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.entry import Entry
-from app.schemas.entry import EntryCreate, EntryRead, Page, EntryUpdate
-from sqlalchemy import select, update, func
-from datetime import datetime, timezone, date
 from app.db.models.tag import Tag
-
+from app.schemas.entry import EntryCreate, EntryRead, EntryUpdate, Page
 
 SORTABLE = {"date": Entry.entry_date, "mood": Entry.mood}
 
@@ -96,7 +93,7 @@ class SqlEntryCrud:
         result = await self._db.execute(
             update(Entry)
             .where(Entry.id == entry_id, Entry.user_id == user_id, Entry.deleted_at.is_(None))
-            .values(deleted_at=datetime.now(timezone.utc))
+            .values(deleted_at=datetime.now(UTC))
         )
 
         await self._db.commit()

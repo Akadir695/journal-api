@@ -25,6 +25,11 @@ class AttachmentRead(BaseModel):
     confirmed_at: datetime | None
 
 
+class AttachmentDownload(BaseModel):
+    url: str
+    expires_in: int
+
+
 class AttachmentUploadResponse(BaseModel):
     attachment: AttachmentRead
     upload_url: str

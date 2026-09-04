@@ -1,9 +1,10 @@
+from datetime import date, timedelta
+
 from sqlalchemy import Integer, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.entry import Entry
-from app.schemas.stats import StreakOut, YearSummaryOut, MonthStatOut
-from datetime import date, timedelta
+from app.schemas.stats import MonthStatOut, StreakOut, YearSummaryOut
 
 
 class StatsCrud:

@@ -1,7 +1,8 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.schemas.tag import TagRead
+
 from app.db.models.tag import Tag
+from app.schemas.tag import TagRead
 
 
 class TagCrud:
