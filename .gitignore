@@ -1,14 +1,37 @@
+# python
 .venv/
+venv/
 __pycache__/
 *.py[cod]
-.env
-*.db
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-.DS_Store
 .coverage
 htmlcov/
+
+# secrets and local data
+.env
+.env.*
+!.env.example
+*.db
 exports/
+
+# os / editor
+.DS_Store
+.idea/
+.vscode/
+
+# scratch
 /*.png
 /*.jpg
+
+# terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+crash.log
+crash.*.log
