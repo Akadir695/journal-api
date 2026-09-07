@@ -10,3 +10,6 @@ output "storage_connection_string" {
   value     = azurerm_storage_account.journal.primary_connection_string
   sensitive = true
 }
+output "api_url" {
+  value = "https://${azurerm_container_app.api.ingress[0].fqdn}"
+}

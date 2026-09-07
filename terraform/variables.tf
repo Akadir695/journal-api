@@ -25,3 +25,26 @@ variable "postgres_admin_password" {
   description = "Admin password for the Postgres server"
   sensitive   = true
 }
+variable "github_username" {
+  type        = string
+  description = "GitHub username for pulling from GHCR"
+  default     = "Akadir695"
+}
+
+variable "ghcr_token" {
+  type        = string
+  description = "GitHub PAT with read:packages"
+  sensitive   = true
+}
+
+variable "jwt_secret" {
+  type        = string
+  description = "Secret used to sign JWTs"
+  sensitive   = true
+}
+
+variable "image_tag" {
+  type        = string
+  description = "Image tag to deploy"
+  default     = "2335757"
+}
