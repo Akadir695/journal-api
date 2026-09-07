@@ -13,3 +13,15 @@ variable "location" {
   description = "Azure region for all resources"
   default     = "uksouth"
 }
+
+variable "postgres_admin_username" {
+  type        = string
+  description = "Admin username for the Postgres server"
+  default     = "journaladmin"
+}
+
+variable "postgres_admin_password" {
+  type        = string
+  description = "Admin password for the Postgres server"
+  sensitive   = true
+}
