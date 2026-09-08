@@ -24,6 +24,7 @@ def get_arq(request: Request):
 
 from functools import lru_cache
 
+
 @lru_cache
 def get_storage() -> Storage:
     settings = get_settings()
@@ -31,6 +32,7 @@ def get_storage() -> Storage:
         settings.azure_storage_connection_string,
         settings.azure_storage_container,
     )
+
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 

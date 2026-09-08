@@ -1,6 +1,3 @@
-
-
-
 async def test_not_found_returns_problem_details(auth_client):
     response = await auth_client.get("/api/v1/entries/999999")
     body = response.json()

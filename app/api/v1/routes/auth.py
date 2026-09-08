@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 from typing import Annotated
-
+from html import escape as html_escape
 from arq import ArqRedis
 from fastapi import APIRouter, Depends
 from fastapi.responses import HTMLResponse
@@ -240,6 +240,44 @@ async def forgot_password(
     if user is not None:
         token = await create_token(db, user.id, "reset_password", ttl_minutes=30)
         await arq.enqueue_job("send_password_reset_email", user.email, token)
+
+
+@router.get(
+    "/auth/reset-password",
+    summary="Password reset form",
+    response_class=HTMLResponse,
+    include_in_schema=False,
+)
+async def reset_password_form(token: str) -> HTMLResponse:
+    """Serve a minimal form so the emailed link works in a browser.
+
+    The form POSTs JSON to the endpoint below, so the API itself stays
+    JSON-only. This exists because a password reset needs input, unlike
+    email verification which a bare GET can complete.
+    """
+    html = """
+    <h1>Set a new password</h1>
+    <input type="hidden" id="token" value="TOKEN_HERE">
+    <input type="password" id="pw" placeholder="New password" minlength="8">
+    <button id="go">Set password</button>
+    <p id="msg"></p>
+    <script>
+    document.getElementById('go').onclick = async () => {
+      const r = await fetch('/api/v1/auth/reset-password', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          token: document.getElementById('token').value,
+          new_password: document.getElementById('pw').value
+        })
+      });
+      document.getElementById('msg').textContent = r.ok
+        ? 'Password updated. You can now log in.'
+        : 'That link is invalid or has expired.';
+    };
+    </script>
+    """
+    return HTMLResponse(html.replace("TOKEN_HERE", html_escape(token)))
 
 
 @router.post(

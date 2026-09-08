@@ -5,6 +5,7 @@ from app.db.models.export import Export
 from app.db.models.user import User
 from app.workers.tasks import _export
 
+
 async def test_export_creates_zip(auth_client, session):
     await auth_client.post(
         "/api/v1/entries",
@@ -28,8 +29,6 @@ async def test_export_creates_zip(auth_client, session):
     assert props is not None
     assert props.size > 0
 
-    
-
 
 async def test_export_is_idempotent(auth_client, session):
     await auth_client.post(
@@ -48,7 +47,6 @@ async def test_export_is_idempotent(auth_client, session):
 
     await _export(session, export.id, user.id)
     assert export.completed_at == first_completed
-    
 
 
 async def test_create_export_returns_202(auth_client, arq_client):

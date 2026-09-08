@@ -1,4 +1,3 @@
-
 from sqlalchemy import select
 
 from app.core.config import get_settings
@@ -312,6 +311,7 @@ async def test_verification_token_is_single_use(client, arq_client):
     assert first.status_code == 204
     assert second.status_code == 401
 
+
 async def test_unverified_user_cannot_use_the_api(client, arq_client):
     await client.post(
         "/api/v1/auth/register",
@@ -327,8 +327,6 @@ async def test_unverified_user_cannot_use_the_api(client, arq_client):
     )
     token = login.json()["access_token"]
 
-    response = await client.get(
-        "/api/v1/entries", headers={"Authorization": f"Bearer {token}"}
-    )
+    response = await client.get("/api/v1/entries", headers={"Authorization": f"Bearer {token}"})
 
     assert response.status_code == 403

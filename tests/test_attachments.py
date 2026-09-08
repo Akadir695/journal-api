@@ -6,6 +6,7 @@ from app.core.storage import BlobProperties
 def _path_from(upload_url: str) -> str:
     return urlparse(upload_url).path.lstrip("/")
 
+
 async def _create(auth_client, **overrides):
     payload = {
         "filename": "cat.png",
@@ -57,9 +58,7 @@ async def test_confirm_reads_properties_from_storage(auth_client, storage, sessi
     assert body["confirmed_at"] is not None
 
 
-async def test_confirm_rejects_file_that_does_not_match_declaration(
-    auth_client, storage
-):
+async def test_confirm_rejects_file_that_does_not_match_declaration(auth_client, storage):
     created = (await _create(auth_client)).json()
     attachment_id = created["attachment"]["id"]
     path = _path_from(created["upload_url"])

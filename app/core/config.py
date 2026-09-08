@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     resend_api_key: str | None = None
     email_from: str = "onboarding@resend.dev"
     environment: str = "development"
-  
+
 
 @lru_cache
 def get_settings():

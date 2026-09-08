@@ -233,3 +233,88 @@ resource "azurerm_container_app" "api" {
     }
   }
 }
+resource "azurerm_container_app" "worker" {
+  name                         = "journal-worker"
+  container_app_environment_id = azurerm_container_app_environment.main.id
+  resource_group_name          = azurerm_resource_group.main.name
+  revision_mode                = "Single"
+
+  registry {
+    server               = "ghcr.io"
+    username             = var.github_username
+    password_secret_name = "ghcr-token"
+  }
+
+  secret {
+    name  = "ghcr-token"
+    value = var.ghcr_token
+  }
+
+  secret {
+    name  = "jwt-secret"
+    value = var.jwt_secret
+  }
+
+  secret {
+    name  = "storage-connection-string"
+    value = azurerm_storage_account.journal.primary_connection_string
+  }
+
+  secret {
+    name  = "database-url"
+    value = "postgresql+asyncpg://${var.postgres_admin_username}:${urlencode(var.postgres_admin_password)}@${azurerm_postgresql_flexible_server.main.fqdn}:5432/journaldb?ssl=require"
+  }
+
+  secret {
+    name  = "resend-api-key"
+    value = var.resend_api_key
+  }
+
+  template {
+    min_replicas = 1
+    max_replicas = 1
+
+    container {
+      name    = "journal-worker"
+      image   = "ghcr.io/akadir695/journal-api:${var.image_tag}"
+      cpu     = 0.25
+      memory  = "0.5Gi"
+      command = ["arq", "app.workers.tasks.WorkerSettings"]
+
+      env {
+        name        = "DATABASE_URL"
+        secret_name = "database-url"
+      }
+
+      env {
+        name        = "JWT_SECRET"
+        secret_name = "jwt-secret"
+      }
+
+      env {
+        name        = "AZURE_STORAGE_CONNECTION_STRING"
+        secret_name = "storage-connection-string"
+      }
+
+      env {
+        name        = "RESEND_API_KEY"
+        secret_name = "resend-api-key"
+      }
+
+      env {
+        name  = "REDIS_URL"
+        value = "redis://redis:6379/0"
+      }
+
+      env {
+        name  = "ENVIRONMENT"
+        value = "production"
+      }
+
+      env {
+        name  = "BASE_URL"
+        value = "https://${azurerm_container_app.api.ingress[0].fqdn}"
+      }
+    }
+  }
+}

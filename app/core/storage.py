@@ -32,12 +32,11 @@ class Storage(Protocol):
         """Release the underlying HTTP connections."""
 
 
-
 class AzureBlobStorage:
     def __init__(self, connection_string: str, container: str) -> None:
         self._client = BlobServiceClient.from_connection_string(connection_string)
         self._container = container
- 
+
     def _sign(self, path: str, permission: BlobSasPermissions, expires_in: int) -> str:
         token = generate_blob_sas(
             account_name=self._client.account_name,
@@ -51,7 +50,7 @@ class AzureBlobStorage:
 
     def upload_url(self, path: str, content_type: str, expires_in: int) -> str:
         return self._sign(path, BlobSasPermissions(create=True, write=True), expires_in)
-    
+
     async def upload(self, path: str, data: bytes, content_type: str) -> None:
         """Upload bytes directly. Used by the worker for exports."""
         blob = self._client.get_blob_client(self._container, path)
@@ -60,9 +59,7 @@ class AzureBlobStorage:
             overwrite=True,
             content_settings=ContentSettings(content_type=content_type),
         )
-    
-    
-   
+
     def read_url(self, path: str, expires_in: int) -> str:
         return self._sign(path, BlobSasPermissions(read=True), expires_in)
 
@@ -81,6 +78,6 @@ class AzureBlobStorage:
         blob = self._client.get_blob_client(self._container, path)
         with contextlib.suppress(ResourceNotFoundError):
             await blob.delete_blob()
-            
+
     async def aclose(self) -> None:
         await self._client.close()
