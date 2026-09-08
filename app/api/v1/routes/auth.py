@@ -3,6 +3,7 @@ from typing import Annotated
 
 from arq import ArqRedis
 from fastapi import APIRouter, Depends
+from fastapi.responses import HTMLResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -163,6 +164,20 @@ async def logout(
         await tokens.revoke(row)
 
 
+async def _verify_email(db: AsyncSession, token: str) -> None:
+    """Consume a verification token and mark the account verified.
+
+    Shared by the POST and GET handlers below so the logic exists once.
+    """
+    user_id = await consume_token(db, token, "verify_email")
+    if user_id is None:
+        raise UnauthorizedError("Invalid or expired token")
+
+    user = await db.get(User, user_id)
+    user.is_verified = True
+    await db.commit()
+
+
 @router.post(
     "/auth/verify-email",
     status_code=204,
@@ -177,13 +192,29 @@ async def verify_email(
 
     Tokens are single-use and expire after 24 hours.
     """
-    user_id = await consume_token(db, data.token, "verify_email")
-    if user_id is None:
-        raise UnauthorizedError("Invalid or expired token")
+    await _verify_email(db, data.token)
 
-    user = await db.get(User, user_id)
-    user.is_verified = True
-    await db.commit()
+
+@router.get(
+    "/auth/verify-email",
+    summary="Verify an email address from a link",
+    response_class=HTMLResponse,
+    responses={401: {"description": "Token is invalid, expired, or already used"}},
+)
+async def verify_email_link(
+    token: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> HTMLResponse:
+    """Confirm an email address by clicking the link in the verification email.
+
+    Clicking a link in an email always sends GET, so this mirrors the POST
+    endpoint above. It returns a page rather than a status code, because a
+    human is looking at the result in a browser.
+    """
+    await _verify_email(db, token)
+    return HTMLResponse(
+        "<h1>Email verified</h1><p>Your account is confirmed. You can now log in.</p>"
+    )
 
 
 @router.post(

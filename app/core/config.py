@@ -14,7 +14,6 @@ class Settings(BaseSettings):
         "All endpoints require a verified account. Authenticate with "
         "`POST /api/v1/auth/login` and send the access token as a bearer token."
     )
-    environment: str = "development"
     database_url: str
     test_database_url: str | None = None
     jwt_secret: str
@@ -28,7 +27,11 @@ class Settings(BaseSettings):
     export_dir: str = "exports"
     azure_storage_connection_string: str
     azure_storage_container: str = "attachments"
-
+    base_url: str = "http://localhost:8000"
+    resend_api_key: str | None = None
+    email_from: str = "onboarding@resend.dev"
+    environment: str = "development"
+  
 
 @lru_cache
 def get_settings():

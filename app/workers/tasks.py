@@ -57,7 +57,7 @@ async def export_entries(ctx, export_id: int, user_id: int) -> None:
 
 async def send_verification_email(ctx, email: str, token: str) -> None:
     sender = get_sender()
-    link = f"http://localhost:8000/api/v1/auth/verify-email?token={token}"
+    link = f"{settings.base_url}/api/v1/auth/verify-email?token={token}"
     await sender.send(
         to=email,
         subject="Verify your email",
@@ -67,7 +67,7 @@ async def send_verification_email(ctx, email: str, token: str) -> None:
 
 async def send_password_reset_email(ctx, email: str, token: str) -> None:
     sender = get_sender()
-    link = f"http://localhost:8000/api/v1/auth/reset-password?token={token}"
+    link = f"{settings.base_url}/api/v1/auth/reset-password?token={token}"
     await sender.send(
         to=email,
         subject="Reset your password",
@@ -76,6 +76,5 @@ async def send_password_reset_email(ctx, email: str, token: str) -> None:
 
 
 class WorkerSettings:
-    functions = [export_entries]
     redis_settings = RedisSettings.from_dsn(settings.redis_url)
     functions = [export_entries, send_verification_email, send_password_reset_email]
