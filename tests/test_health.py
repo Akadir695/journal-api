@@ -1,6 +1,7 @@
 from app.api.deps import get_redis
 from app.main import app
 
+
 async def test_liveness_always_returns_ok(client):
     response = await client.get("/health")
 

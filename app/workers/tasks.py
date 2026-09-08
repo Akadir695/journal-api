@@ -1,18 +1,18 @@
+import io
 import zipfile
 from datetime import UTC, datetime
-from pathlib import Path
 
 from arq.connections import RedisSettings
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.api.deps import get_storage
 from app.core.config import get_settings
 from app.core.email import get_sender
 from app.db.models.entry import Entry
 from app.db.models.export import Export
 
 settings = get_settings()
-EXPORT_DIR = Path(settings.export_dir).resolve()
 
 
 async def _export(session: AsyncSession, export_id: int, user_id: int) -> None:
@@ -27,10 +27,9 @@ async def _export(session: AsyncSession, export_id: int, user_id: int) -> None:
     )
     entries = result.scalars().all()
 
-    EXPORT_DIR.mkdir(exist_ok=True)
-    path = EXPORT_DIR / f"export-{export_id}.zip"
+    zip_buffer = io.BytesIO()
 
-    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
         for entry in entries:
             filename = f"{entry.entry_date}-{entry.id}.md"
             content = (
@@ -41,8 +40,12 @@ async def _export(session: AsyncSession, export_id: int, user_id: int) -> None:
             )
             zf.writestr(filename, content)
 
+    blob_name = f"exports/export-{export_id}.zip"
+    storage = get_storage()
+    await storage.upload(blob_name, zip_buffer.getvalue(), "application/zip")
+
     export.status = "ready"
-    export.file_path = str(path)
+    export.file_path = blob_name
     export.completed_at = datetime.now(UTC)
     await session.commit()
 

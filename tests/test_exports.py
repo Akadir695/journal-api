@@ -1,11 +1,9 @@
-from pathlib import Path
-
 from sqlalchemy import select
 
+from app.api.deps import get_storage
 from app.db.models.export import Export
 from app.db.models.user import User
 from app.workers.tasks import _export
-
 
 async def test_export_creates_zip(auth_client, session):
     await auth_client.post(
@@ -23,10 +21,14 @@ async def test_export_creates_zip(auth_client, session):
     await _export(session, export.id, user.id)
 
     assert export.status == "ready"
-    assert export.file_path is not None
-    assert Path(export.file_path).exists()
+    assert export.file_path == f"exports/export-{export.id}.zip"
 
-    Path(export.file_path).unlink()
+    storage = get_storage()
+    props = await storage.get_properties(export.file_path)
+    assert props is not None
+    assert props.size > 0
+
+    
 
 
 async def test_export_is_idempotent(auth_client, session):
@@ -46,7 +48,7 @@ async def test_export_is_idempotent(auth_client, session):
 
     await _export(session, export.id, user.id)
     assert export.completed_at == first_completed
-    Path(export.file_path).unlink()
+    
 
 
 async def test_create_export_returns_202(auth_client, arq_client):

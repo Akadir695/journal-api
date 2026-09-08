@@ -1,10 +1,8 @@
-from app.core.security import create_access_token
-import jwt
-from datetime import UTC, datetime, timedelta
 
-from app.core.config import get_settings
 from sqlalchemy import select
 
+from app.core.config import get_settings
+from app.core.security import create_access_token
 from app.db.models.user import User
 
 settings = get_settings()

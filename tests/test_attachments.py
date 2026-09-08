@@ -1,5 +1,6 @@
-from app.core.storage import BlobProperties
 from urllib.parse import urlparse
+
+from app.core.storage import BlobProperties
 
 
 def _path_from(upload_url: str) -> str:

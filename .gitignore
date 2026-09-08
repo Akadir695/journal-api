@@ -34,4 +34,4 @@ exports/
 *.tfvars.json
 !*.tfvars.example
 crash.log
-crash.*.log
+crash.*.logexport.zip

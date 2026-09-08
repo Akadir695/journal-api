@@ -2,18 +2,20 @@ from typing import Annotated
 
 from arq import ArqRedis
 from fastapi import APIRouter, Depends
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_arq, get_current_user
+from app.api.deps import get_arq, get_current_user, get_storage
 from app.api.responses import AUTH_ERRORS, NOT_FOUND
 from app.core.exceptions import NotFoundError
 from app.db.models.export import Export
 from app.db.models.user import User
 from app.db.session import get_db
-from app.schemas.export import ExportRead
+from app.schemas.export import ExportRead, ExportDownload
 
 router = APIRouter()
 
+storage = get_storage()
 
 @router.post(
     "/exports",
@@ -66,3 +68,32 @@ async def read_export(
     if export is None or export.user_id != current_user.id:
         raise NotFoundError("Export not found")
     return ExportRead.model_validate(export)
+
+# download endpoint GET /exports/{export_id}/download
+@router.get(
+    "/exports/{export_id}/download",
+    summary="Get a download link for an export",
+    response_description="A short-lived signed URL for the export file",
+    responses={**AUTH_ERRORS, **NOT_FOUND},
+)
+async def download_export(
+    export_id: int,
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> ExportDownload:
+    """Get a download link for a finished export.
+
+    Returns a short-lived signed URL. The file is served directly by Blob
+    Storage, so downloads never pass through this API. The link expires
+    after five minutes.
+    """
+    export = await db.get(Export, export_id)
+    if export is None or export.user_id != current_user.id:
+        raise NotFoundError("Export not found")
+
+    if export.status != "ready":
+        raise NotFoundError("Export is not ready yet")
+
+    storage = get_storage()
+    url = storage.read_url(export.file_path, expires_in=300)
+    return ExportDownload(download_url=url)

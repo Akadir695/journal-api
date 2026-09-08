@@ -4,6 +4,10 @@ from httpx import ASGITransport, AsyncClient
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
+import pytest
+
+from app.api.deps import get_storage
+
 
 from app.api.deps import get_storage
 from app.core.config import get_settings
@@ -13,6 +17,12 @@ from app.db.session import get_db
 from app.main import app
 
 settings = get_settings()
+@pytest.fixture(autouse=True)
+async def _reset_storage():
+    yield
+    storage = get_storage()
+    await storage.aclose()
+    get_storage.cache_clear()
 
 if not settings.test_database_url or not settings.test_database_url.endswith("_test"):
     raise RuntimeError("TEST_DATABASE_URL must be set and end with _test")

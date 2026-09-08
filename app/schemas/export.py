@@ -11,3 +11,5 @@ class ExportRead(BaseModel):
     file_path: str | None
     created_at: datetime
     completed_at: datetime | None
+class ExportDownload(BaseModel):
+    download_url: str

@@ -1,6 +1,4 @@
-from app.core import rate_limit
 
-from app.crud.user import UserCrud
 
 
 async def test_not_found_returns_problem_details(auth_client):
