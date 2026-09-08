@@ -310,11 +310,6 @@ resource "azurerm_container_app" "worker" {
         name  = "ENVIRONMENT"
         value = "production"
       }
-
-      env {
-        name  = "BASE_URL"
-        value = "https://${azurerm_container_app.api.ingress[0].fqdn}"
-      }
     }
   }
 }

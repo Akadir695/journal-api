@@ -46,7 +46,7 @@ variable "jwt_secret" {
 variable "image_tag" {
   type        = string
   description = "Image tag to deploy"
-  default     = "143782c"
+  default     = "b70be4f"
 }
 
 variable "resend_api_key" {

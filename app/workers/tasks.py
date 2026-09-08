@@ -60,21 +60,29 @@ async def export_entries(ctx, export_id: int, user_id: int) -> None:
 
 async def send_verification_email(ctx, email: str, token: str) -> None:
     sender = get_sender()
-    link = f"{settings.base_url}/api/v1/auth/verify-email?token={token}"
     await sender.send(
         to=email,
         subject="Verify your email",
-        body=f"Welcome. Confirm your address:\n\n{link}\n",
+        body=(
+            "Welcome. Your verification code is:\n\n"
+            f"{token}\n\n"
+            "Send it to POST /api/v1/auth/verify-email to confirm your address. "
+            "It expires in 24 hours.\n"
+        ),
     )
 
 
 async def send_password_reset_email(ctx, email: str, token: str) -> None:
     sender = get_sender()
-    link = f"{settings.base_url}/api/v1/auth/reset-password?token={token}"
     await sender.send(
         to=email,
         subject="Reset your password",
-        body=f"Reset your password:\n\n{link}\n\nThis link expires in 30 minutes.\n",
+        body=(
+            "Your password reset code is:\n\n"
+            f"{token}\n\n"
+            "Send it to POST /api/v1/auth/reset-password with your new password. "
+            "It expires in 30 minutes.\n"
+        ),
     )
 
 
