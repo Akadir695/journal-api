@@ -2,7 +2,6 @@ from typing import Annotated
 
 from arq import ArqRedis
 from fastapi import APIRouter, Depends
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_arq, get_current_user, get_storage
@@ -11,7 +10,7 @@ from app.core.exceptions import NotFoundError
 from app.db.models.export import Export
 from app.db.models.user import User
 from app.db.session import get_db
-from app.schemas.export import ExportRead, ExportDownload
+from app.schemas.export import ExportDownload, ExportRead
 
 router = APIRouter()
 
@@ -93,9 +92,9 @@ async def download_export(
     if export is None or export.user_id != current_user.id:
         raise NotFoundError("Export not found")
 
-    if export.status != "ready":
+    if export.status != "ready" or export.file_path is None:
         raise NotFoundError("Export is not ready yet")
 
     storage = get_storage()
-    url = storage.read_url(export.file_path, expires_in=300)
+    url = await storage.read_url(export.file_path, expires_in=300)
     return ExportDownload(download_url=url)

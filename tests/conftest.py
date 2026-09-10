@@ -4,10 +4,6 @@ from httpx import ASGITransport, AsyncClient
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
-import pytest
-
-from app.api.deps import get_storage
-
 
 from app.api.deps import get_storage
 from app.core.config import get_settings
@@ -158,10 +154,10 @@ class FakeStorage:
         self.blobs: dict[str, BlobProperties] = {}
         self.deleted: list[str] = []
 
-    def upload_url(self, path: str, content_type: str, expires_in: int) -> str:
+    async def upload_url(self, path: str, content_type: str, expires_in: int) -> str:
         return f"https://fake.blob/{path}?sig=upload"
 
-    def read_url(self, path: str, expires_in: int) -> str:
+    async def read_url(self, path: str, expires_in: int) -> str:
         return f"https://fake.blob/{path}?sig=read"
 
     async def get_properties(self, path: str) -> BlobProperties | None:

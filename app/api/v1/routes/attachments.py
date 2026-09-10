@@ -66,9 +66,13 @@ async def create_attachment(
     await db.commit()
     await db.refresh(attachment)
 
+    upload_url = await storage.upload_url(
+        attachment.blob_path, payload.content_type, UPLOAD_URL_TTL
+    )
+
     return AttachmentUploadResponse(
         attachment=AttachmentRead.model_validate(attachment),
-        upload_url=storage.upload_url(attachment.blob_path, payload.content_type, UPLOAD_URL_TTL),
+        upload_url=upload_url,
         expires_in=UPLOAD_URL_TTL,
     )
 
@@ -173,7 +177,9 @@ async def read_attachment(
     if attachment.status != "ready":
         raise NotFoundError("Attachment not ready")
 
+    url = await storage.read_url(attachment.blob_path, READ_URL_TTL)
+
     return AttachmentDownload(
-        url=storage.read_url(attachment.blob_path, READ_URL_TTL),
+        url=url,
         expires_in=READ_URL_TTL,
     )

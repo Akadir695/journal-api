@@ -212,7 +212,6 @@ async def forgot_password(
         await arq.enqueue_job("send_password_reset_email", user.email, token)
 
 
-
 @router.post(
     "/auth/reset-password",
     status_code=204,

@@ -22,15 +22,19 @@ def get_arq(request: Request):
     return request.app.state.arq
 
 
-from functools import lru_cache
-
-
 @lru_cache
 def get_storage() -> Storage:
+    """Build a storage client for wherever we are running.
+
+    A connection string means local development against Azurite, which only
+    understands account keys. Without one we are in Azure, where the managed
+    identity means there is no key to hold.
+    """
     settings = get_settings()
     return AzureBlobStorage(
-        settings.azure_storage_connection_string,
-        settings.azure_storage_container,
+        container=settings.azure_storage_container,
+        connection_string=settings.azure_storage_connection_string,
+        account_name=settings.azure_storage_account_name,
     )
 
 

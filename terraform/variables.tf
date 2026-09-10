@@ -31,17 +31,7 @@ variable "github_username" {
   default     = "Akadir695"
 }
 
-variable "ghcr_token" {
-  type        = string
-  description = "GitHub PAT with read:packages"
-  sensitive   = true
-}
 
-variable "jwt_secret" {
-  type        = string
-  description = "Secret used to sign JWTs"
-  sensitive   = true
-}
 
 variable "image_tag" {
   type        = string
@@ -49,8 +39,3 @@ variable "image_tag" {
   default     = "daba3d4"
 }
 
-variable "resend_api_key" {
-  type        = string
-  description = "Resend API key for sending email"
-  sensitive   = true
-}

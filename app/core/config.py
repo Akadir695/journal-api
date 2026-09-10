@@ -25,11 +25,12 @@ class Settings(BaseSettings):
     test_redis_url: str = "redis://localhost:6379/15"
     cache_ttl_seconds: int = 300
     export_dir: str = "exports"
-    azure_storage_connection_string: str
     azure_storage_container: str = "attachments"
     resend_api_key: str | None = None
     email_from: str = "onboarding@resend.dev"
     environment: str = "development"
+    azure_storage_connection_string: str | None = None
+    azure_storage_account_name: str | None = None
 
 
 @lru_cache

@@ -31,6 +31,11 @@ resource "azurerm_resource_group" "main" {
     managed_by  = "terraform"
   }
 }
+resource "azurerm_user_assigned_identity" "app" {
+  name                = "id-${var.project}-${var.environment}"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+}
 resource "azurerm_storage_account" "journal" {
   name                     = "stjournaldev8701"
   resource_group_name      = azurerm_resource_group.main.name
@@ -71,6 +76,7 @@ resource "azurerm_postgresql_flexible_server" "main" {
     environment = var.environment
     managed_by  = "terraform"
   }
+
 }
 
 resource "azurerm_postgresql_flexible_server_firewall_rule" "my_ip" {
@@ -150,13 +156,15 @@ resource "azurerm_container_app" "api" {
   }
 
   secret {
-    name  = "ghcr-token"
-    value = var.ghcr_token
+    name                = "ghcr-token"
+    key_vault_secret_id = "${azurerm_key_vault.main.vault_uri}secrets/ghcr-token"
+    identity            = azurerm_user_assigned_identity.app.id
   }
 
   secret {
-    name  = "jwt-secret"
-    value = var.jwt_secret
+    name                = "jwt-secret"
+    key_vault_secret_id = "${azurerm_key_vault.main.vault_uri}secrets/jwt-secret"
+    identity            = azurerm_user_assigned_identity.app.id
   }
 
   secret {
@@ -209,6 +217,16 @@ resource "azurerm_container_app" "api" {
         value = "production"
       }
 
+      env {
+        name  = "AZURE_CLIENT_ID"
+        value = azurerm_user_assigned_identity.app.client_id
+      }
+
+      env {
+        name  = "AZURE_STORAGE_ACCOUNT_NAME"
+        value = azurerm_storage_account.journal.name
+      }
+
       liveness_probe {
         transport = "HTTP"
         port      = 8000
@@ -232,6 +250,10 @@ resource "azurerm_container_app" "api" {
       percentage      = 100
     }
   }
+  identity {
+    type         = "UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.app.id]
+  }
 }
 resource "azurerm_container_app" "worker" {
   name                         = "journal-worker"
@@ -246,13 +268,15 @@ resource "azurerm_container_app" "worker" {
   }
 
   secret {
-    name  = "ghcr-token"
-    value = var.ghcr_token
+    name                = "ghcr-token"
+    key_vault_secret_id = "${azurerm_key_vault.main.vault_uri}secrets/ghcr-token"
+    identity            = azurerm_user_assigned_identity.app.id
   }
 
   secret {
-    name  = "jwt-secret"
-    value = var.jwt_secret
+    name                = "jwt-secret"
+    key_vault_secret_id = "${azurerm_key_vault.main.vault_uri}secrets/jwt-secret"
+    identity            = azurerm_user_assigned_identity.app.id
   }
 
   secret {
@@ -266,10 +290,10 @@ resource "azurerm_container_app" "worker" {
   }
 
   secret {
-    name  = "resend-api-key"
-    value = var.resend_api_key
+    name                = "resend-api-key"
+    key_vault_secret_id = "${azurerm_key_vault.main.vault_uri}secrets/resend-api-key"
+    identity            = azurerm_user_assigned_identity.app.id
   }
-
   template {
     min_replicas = 1
     max_replicas = 1
@@ -310,6 +334,63 @@ resource "azurerm_container_app" "worker" {
         name  = "ENVIRONMENT"
         value = "production"
       }
+
+      env {
+        name  = "AZURE_CLIENT_ID"
+        value = azurerm_user_assigned_identity.app.client_id
+      }
+
+      env {
+        name  = "AZURE_STORAGE_ACCOUNT_NAME"
+        value = azurerm_storage_account.journal.name
+      }
     }
   }
+  identity {
+    type         = "UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.app.id]
+  }
+}
+
+data "azurerm_client_config" "current" {}
+
+resource "azurerm_key_vault" "main" {
+  name                = "kv-${var.project}-${var.environment}-8701"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  tenant_id           = data.azurerm_client_config.current.tenant_id
+  sku_name            = "standard"
+
+  rbac_authorization_enabled = true
+  purge_protection_enabled   = false
+  soft_delete_retention_days = 7
+}
+
+resource "azurerm_role_assignment" "kv_app_read" {
+  scope                = azurerm_key_vault.main.id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = azurerm_user_assigned_identity.app.principal_id
+}
+
+resource "azurerm_role_assignment" "kv_me_write" {
+  scope                = azurerm_key_vault.main.id
+  role_definition_name = "Key Vault Secrets Officer"
+  principal_id         = data.azurerm_client_config.current.object_id
+}
+
+resource "azurerm_role_assignment" "storage_blob" {
+  scope                = azurerm_storage_account.journal.id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = azurerm_user_assigned_identity.app.principal_id
+}
+resource "azurerm_role_assignment" "storage_blob" {
+  scope                = azurerm_storage_account.journal.id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = azurerm_user_assigned_identity.app.principal_id
+}
+
+resource "azurerm_role_assignment" "storage_delegator" {
+  scope                = azurerm_storage_account.journal.id
+  role_definition_name = "Storage Blob Delegator"
+  principal_id         = azurerm_user_assigned_identity.app.principal_id
 }

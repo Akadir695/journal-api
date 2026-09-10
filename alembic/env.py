@@ -8,14 +8,18 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
 from app.core.config import get_settings
 from app.db.base import Base
-from app.db.models.entry import Entry
-from app.db.models.refresh_token import RefreshToken
-from app.db.models.user import User
-from app.db.models.tag import Tag
-from app.db.models.entry_tag import EntryTag
-from app.db.models.export import Export
-from app.db.models.one_time_token import OneTimeToken
-from app.db.models.attachment import Attachment
+
+# Imported for their side effect: each model registers itself on Base.metadata,
+# which is what --autogenerate compares against. Removing any of these makes
+# Alembic think the table does not exist and generate a migration to drop it.
+from app.db.models.attachment import Attachment  # noqa: F401
+from app.db.models.entry import Entry  # noqa: F401
+from app.db.models.entry_tag import EntryTag  # noqa: F401
+from app.db.models.export import Export  # noqa: F401
+from app.db.models.one_time_token import OneTimeToken  # noqa: F401
+from app.db.models.refresh_token import RefreshToken  # noqa: F401
+from app.db.models.tag import Tag  # noqa: F401
+from app.db.models.user import User  # noqa: F401
 
 __all__ = ["Entry", "RefreshToken", "User"]
 
