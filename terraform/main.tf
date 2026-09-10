@@ -19,7 +19,9 @@ terraform {
 
 provider "azurerm" {
   features {}
+  storage_use_azuread = true
 }
+
 
 resource "azurerm_resource_group" "main" {
   name     = "rg-${var.project}-${var.environment}"
@@ -43,6 +45,10 @@ resource "azurerm_storage_account" "journal" {
   account_tier             = "Standard"
   account_replication_type = "LRS"
   min_tls_version          = "TLS1_2"
+
+  # Both account keys stop working. The app authenticates with its managed
+  # identity instead, so there is no shared secret left to leak or rotate.
+  shared_access_key_enabled = false
 
   tags = {
     environment = "dev"
@@ -168,11 +174,6 @@ resource "azurerm_container_app" "api" {
   }
 
   secret {
-    name  = "storage-connection-string"
-    value = azurerm_storage_account.journal.primary_connection_string
-  }
-
-  secret {
     name  = "database-url"
     value = "postgresql+asyncpg://${var.postgres_admin_username}:${urlencode(var.postgres_admin_password)}@${azurerm_postgresql_flexible_server.main.fqdn}:5432/journaldb?ssl=require"
   }
@@ -202,10 +203,7 @@ resource "azurerm_container_app" "api" {
         secret_name = "jwt-secret"
       }
 
-      env {
-        name        = "AZURE_STORAGE_CONNECTION_STRING"
-        secret_name = "storage-connection-string"
-      }
+
 
       env {
         name  = "REDIS_URL"
@@ -279,10 +277,6 @@ resource "azurerm_container_app" "worker" {
     identity            = azurerm_user_assigned_identity.app.id
   }
 
-  secret {
-    name  = "storage-connection-string"
-    value = azurerm_storage_account.journal.primary_connection_string
-  }
 
   secret {
     name  = "database-url"
@@ -315,10 +309,7 @@ resource "azurerm_container_app" "worker" {
         secret_name = "jwt-secret"
       }
 
-      env {
-        name        = "AZURE_STORAGE_CONNECTION_STRING"
-        secret_name = "storage-connection-string"
-      }
+
 
       env {
         name        = "RESEND_API_KEY"
@@ -383,14 +374,21 @@ resource "azurerm_role_assignment" "storage_blob" {
   role_definition_name = "Storage Blob Data Contributor"
   principal_id         = azurerm_user_assigned_identity.app.principal_id
 }
-resource "azurerm_role_assignment" "storage_blob" {
+
+resource "azurerm_role_assignment" "storage_me" {
   scope                = azurerm_storage_account.journal.id
   role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = azurerm_user_assigned_identity.app.principal_id
+  principal_id         = data.azurerm_client_config.current.object_id
 }
 
 resource "azurerm_role_assignment" "storage_delegator" {
   scope                = azurerm_storage_account.journal.id
   role_definition_name = "Storage Blob Delegator"
   principal_id         = azurerm_user_assigned_identity.app.principal_id
+}
+
+resource "azurerm_storage_container" "attachments" {
+  name                  = var.azure_storage_container
+  storage_account_id    = azurerm_storage_account.journal.id
+  container_access_type = "private"
 }

@@ -36,6 +36,12 @@ variable "github_username" {
 variable "image_tag" {
   type        = string
   description = "Image tag to deploy"
-  default     = "daba3d4"
+  default     = "db9e0d3"
 }
 
+
+variable "azure_storage_container" {
+  type        = string
+  description = "Blob container for attachments and exports"
+  default     = "attachments"
+}
