@@ -11,6 +11,8 @@ from azure.monitor.opentelemetry import configure_azure_monitor
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from opentelemetry import trace
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from redis.asyncio import Redis
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,7 +24,6 @@ from app.core.handlers import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.rate_limit import check_rate_limit
 from app.db.session import get_db
-from opentelemetry import trace
 
 PROBE_TIMEOUT = 2.0
 
@@ -30,10 +31,14 @@ logger = structlog.get_logger()
 
 settings = get_settings()
 configure_logging(settings.environment)
+
+# Opens the export pipe to Application Insights. Without this, telemetry is
+# produced but never leaves the process.
 if settings.applicationinsights_connection_string:
     configure_azure_monitor(
         connection_string=settings.applicationinsights_connection_string,
     )
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -52,7 +57,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-
+# The pipe alone does not produce request spans — auto-instrumentation did not
+# pick up FastAPI, so hook it to the app explicitly.
+if settings.applicationinsights_connection_string:
+    FastAPIInstrumentor.instrument_app(app)
 
 
 register_exception_handlers(app)
