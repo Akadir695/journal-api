@@ -7,8 +7,11 @@ terraform {
     http = {
       source = "hashicorp/http"
     }
+    azuread = {
+      source  = "hashicorp/azuread"
+      version = "~> 3.0"
+    }
   }
-
   backend "azurerm" {
     resource_group_name  = "rg-journal-tfstate"
     storage_account_name = "stjournaltfstate8701"
@@ -406,4 +409,39 @@ resource "azurerm_application_insights" "main" {
   location            = azurerm_resource_group.main.location
   workspace_id        = azurerm_log_analytics_workspace.main.id
   application_type    = "web"
+}
+
+
+# An identity for GitHub Actions. No password — it proves itself with a token.
+resource "azuread_application" "ci" {
+  display_name = "gh-${var.project}-${var.environment}"
+}
+
+resource "azuread_service_principal" "ci" {
+  client_id = azuread_application.ci.client_id
+}
+
+# The trust rule. Azure accepts GitHub's token only when it claims to come
+# from this exact repository on this exact branch.
+resource "azuread_application_federated_identity_credential" "ci_main" {
+  application_id = azuread_application.ci.id
+  display_name   = "github-main"
+  audiences      = ["api://AzureADTokenExchange"]
+  issuer         = "https://token.actions.githubusercontent.com"
+  subject        = "repo:Akadir695/journal-api:ref:refs/heads/main"
+}
+
+# Scoped to the two container apps, not the resource group. The pipeline can
+# deploy new images and nothing else — it cannot reach Postgres, Key Vault or
+# storage even if the workflow is compromised.
+resource "azurerm_role_assignment" "ci_api" {
+  scope                = azurerm_container_app.api.id
+  role_definition_name = "Contributor"
+  principal_id         = azuread_service_principal.ci.object_id
+}
+
+resource "azurerm_role_assignment" "ci_worker" {
+  scope                = azurerm_container_app.worker.id
+  role_definition_name = "Contributor"
+  principal_id         = azuread_service_principal.ci.object_id
 }
