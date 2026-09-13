@@ -5,7 +5,7 @@ from app.main import app
 async def test_liveness_always_returns_ok(client):
     response = await client.get("/health")
 
-    assert response.status_code == 201
+    assert response.status_code == 200
     assert response.json()["status"] == "ok"
 
 
