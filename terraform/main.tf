@@ -259,6 +259,12 @@ resource "azurerm_container_app" "api" {
     type         = "UserAssigned"
     identity_ids = [azurerm_user_assigned_identity.app.id]
   }
+
+  lifecycle {
+    # CI owns the deployed image. Without this, terraform apply would revert
+    # the container to image_tag and undo the most recent deploy.
+    ignore_changes = [template[0].container[0].image]
+  }
 }
 resource "azurerm_container_app" "worker" {
   name                         = "journal-worker"
@@ -352,6 +358,12 @@ resource "azurerm_container_app" "worker" {
     type         = "UserAssigned"
     identity_ids = [azurerm_user_assigned_identity.app.id]
   }
+
+  lifecycle {
+    # CI owns the deployed image. Without this, terraform apply would revert
+    # the container to image_tag and undo the most recent deploy.
+    ignore_changes = [template[0].container[0].image]
+  }
 }
 
 data "azurerm_client_config" "current" {}
@@ -428,7 +440,10 @@ resource "azuread_application_federated_identity_credential" "ci_main" {
   display_name   = "github-main"
   audiences      = ["api://AzureADTokenExchange"]
   issuer         = "https://token.actions.githubusercontent.com"
-  subject        = "repo:Akadir695/journal-api:ref:refs/heads/main"
+  # GitHub issues tokens with immutable numeric IDs for the owner and repo, so
+  # the subject must match those rather than the display names. The IDs survive
+  # a rename; the names do not.
+  subject = "repo:Akadir695@126913888/journal-api@1315151603:ref:refs/heads/main"
 }
 
 # Scoped to the two container apps, not the resource group. The pipeline can
