@@ -36,7 +36,7 @@ variable "github_username" {
 variable "image_tag" {
   type        = string
   description = "Image tag to deploy"
-  default     = "3c6124a"
+  default     = "3195ef7"
 }
 
 

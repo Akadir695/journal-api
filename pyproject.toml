@@ -37,7 +37,7 @@ dev = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-addopts = "--cov=app --cov-report=term-missing"
+addopts = "--cov=app --cov-report=term-missing --cov-fail-under=85"
 
 [tool.coverage.run]
 source = ["app"]
@@ -62,4 +62,3 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.mypy]
 python_version = "3.12"
 disallow_untyped_defs = true
-addopts = "--cov=app --cov-report=term-missing --cov-fail-under=85"
