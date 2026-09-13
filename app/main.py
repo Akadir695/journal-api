@@ -210,3 +210,11 @@ async def readiness(
         status_code=200 if ready else 503,
         content={"status": "ready" if ready else "not ready", "checks": checks},
     )
+@app.get("/", summary="API information", tags=["health"])
+async def root() -> dict[str, str]:
+    """Name and version, so the root of the API is not a 404."""
+    return {
+        "name": settings.app_name,
+        "version": settings.app_version,
+        "docs": "/docs",
+    }
