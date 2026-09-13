@@ -7,6 +7,7 @@ from uuid import uuid4
 import structlog
 from arq import create_pool
 from arq.connections import RedisSettings
+from azure.monitor.opentelemetry import configure_azure_monitor
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -21,6 +22,7 @@ from app.core.handlers import register_exception_handlers
 from app.core.logging import configure_logging
 from app.core.rate_limit import check_rate_limit
 from app.db.session import get_db
+from opentelemetry import trace
 
 PROBE_TIMEOUT = 2.0
 
@@ -28,7 +30,10 @@ logger = structlog.get_logger()
 
 settings = get_settings()
 configure_logging(settings.environment)
-
+if settings.applicationinsights_connection_string:
+    configure_azure_monitor(
+        connection_string=settings.applicationinsights_connection_string,
+    )
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -46,6 +51,10 @@ app = FastAPI(
     version=settings.app_version,
     lifespan=lifespan,
 )
+
+
+
+
 register_exception_handlers(app)
 app.include_router(api_router, prefix="/api/v1")
 
@@ -56,6 +65,14 @@ async def logging_middleware(request: Request, call_next):
     request_id = str(uuid4())
     request.state.request_id = request_id
     structlog.contextvars.bind_contextvars(request_id=request_id)
+
+    # Tag logs with the trace id so a log line can be joined to its trace.
+    span_context = trace.get_current_span().get_span_context()
+    if span_context.is_valid:
+        structlog.contextvars.bind_contextvars(
+            trace_id=format(span_context.trace_id, "032x")
+        )
+
     start = time.perf_counter()
 
     response = await call_next(request)
@@ -72,8 +89,6 @@ async def logging_middleware(request: Request, call_next):
 
     response.headers["X-Request-ID"] = request_id
     return response
-
-
 # rate limiter middleware
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):

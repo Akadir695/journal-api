@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     environment: str = "development"
     azure_storage_connection_string: str | None = None
     azure_storage_account_name: str | None = None
+    applicationinsights_connection_string: str | None = None
 
 
 @lru_cache

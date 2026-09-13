@@ -219,6 +219,10 @@ resource "azurerm_container_app" "api" {
         name  = "AZURE_CLIENT_ID"
         value = azurerm_user_assigned_identity.app.client_id
       }
+      env {
+        name  = "APPLICATIONINSIGHTS_CONNECTION_STRING"
+        value = azurerm_application_insights.main.connection_string
+      }
 
       env {
         name  = "AZURE_STORAGE_ACCOUNT_NAME"
@@ -330,6 +334,10 @@ resource "azurerm_container_app" "worker" {
         name  = "AZURE_CLIENT_ID"
         value = azurerm_user_assigned_identity.app.client_id
       }
+      env {
+        name  = "APPLICATIONINSIGHTS_CONNECTION_STRING"
+        value = azurerm_application_insights.main.connection_string
+      }
 
       env {
         name  = "AZURE_STORAGE_ACCOUNT_NAME"
@@ -391,4 +399,11 @@ resource "azurerm_storage_container" "attachments" {
   name                  = var.azure_storage_container
   storage_account_id    = azurerm_storage_account.journal.id
   container_access_type = "private"
+}
+resource "azurerm_application_insights" "main" {
+  name                = "appi-${var.project}-${var.environment}"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  workspace_id        = azurerm_log_analytics_workspace.main.id
+  application_type    = "web"
 }
