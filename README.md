@@ -1,11 +1,3 @@
-
-
-https://github.com/user-attachments/assets/f09ad376-3195-441a-a6ad-f497b2e445c0
-
-
-
-https://github.com/user-attachments/assets/0758f8a9-08ff-438b-bb20-b838e9b588ce
-
 # Journal API
 
 A private journaling API built with FastAPI and deployed to Azure Container Apps, with every piece of infrastructure defined in Terraform.
@@ -48,13 +40,7 @@ Registration sends a verification code by email, delivered by a background worke
 
 The recording below picks up from an authenticated session: creating, listing, updating, soft-deleting and restoring entries.
 
-<!-- VIDEO: drag the .mov into the GitHub README editor and paste the generated URL here -->
-
-<!-- SCREENSHOTS
-![Verification email](docs/images/verification-email.png)
-![Application Insights](docs/images/app-insights.png)
-![CI pipeline](docs/images/ci-pipeline.png)
--->
+https://github.com/user-attachments/assets/f09ad376-3195-441a-a6ad-f497b2e445c0
 
 
 ---
