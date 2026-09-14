@@ -319,17 +319,51 @@ Things that are missing or compromised, and why.
 ## Project structure
 
 ```
-app/
-  api/v1/routes/     endpoint handlers
-  core/              config, security, storage, logging, rate limiting
-  crud/              database operations
-  db/models/         SQLAlchemy models
-  schemas/           Pydantic request and response models
-  workers/           ARQ background tasks
-alembic/             database migrations
-terraform/           all Azure infrastructure
-tests/               77 tests
-.github/workflows/   CI pipeline
+journal-api/
+├── app/
+│   ├── api/
+│   │   ├── deps.py                 dependency providers (db, redis, storage, current user)
+│   │   ├── responses.py            shared OpenAPI error responses
+│   │   └── v1/routes/              entries · auth · users · tags · stats · exports · attachments
+│   ├── core/
+│   │   ├── config.py               pydantic-settings, environment beats .env
+│   │   ├── security.py             Argon2 hashing, JWT creation
+│   │   ├── storage.py              blob storage, account key or managed identity
+│   │   ├── rate_limit.py           per-IP limiting in Redis
+│   │   ├── cache.py                response caching
+│   │   ├── email.py                Resend in production, stdout locally
+│   │   ├── exceptions.py           domain errors
+│   │   ├── handlers.py             RFC 9457 problem detail responses
+│   │   └── logging.py              structlog, JSON in production
+│   ├── crud/                       database operations, one module per aggregate
+│   ├── db/
+│   │   ├── models/                 SQLAlchemy models
+│   │   └── session.py              async engine and session factory
+│   ├── schemas/                    Pydantic request and response models
+│   ├── workers/tasks.py            ARQ jobs — exports, verification and reset email
+│   └── main.py                     app factory, middleware, health endpoints
+│
+├── alembic/versions/               12 migrations
+│
+├── terraform/
+│   ├── main.tf                     25 resources
+│   ├── variables.tf
+│   ├── outputs.tf
+│   └── terraform.tfvars            non-secret values (secrets.auto.tfvars is gitignored)
+│
+├── tests/                          77 tests, 89% coverage
+│   └── conftest.py                 fixtures — transactional sessions, fakes for arq and storage
+│
+├── docs/
+│   ├── architecture.py             generates the architecture diagram
+│   ├── pipeline.py                 generates the pipeline diagram
+│   └── images/
+│
+├── .github/workflows/ci.yml        test · secrets · build · deploy
+├── Dockerfile                      multi-stage, non-root, healthcheck
+├── docker-compose.yml              PostgreSQL, Redis, Azurite for local development
+├── .gitleaksignore                 four reviewed false positives
+└── pyproject.toml                  dependencies, ruff, pytest, coverage gate
 ```
 
 ---
