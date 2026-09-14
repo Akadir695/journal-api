@@ -1,246 +1,318 @@
 # Journal API
 
-A private journaling backend. Users register, write dated entries, tag them, attach
-images, search their history and see statistics about their habits. Built as an API
-with no frontend, deployed to Azure Container Apps and provisioned entirely with
-Terraform.
+A private journaling API built with FastAPI and deployed to Azure Container Apps, with every piece of infrastructure defined in Terraform.
 
-The point of the project was not the journaling. It was to build one service properly
-end to end — from schema design through authentication, background jobs, containers,
-infrastructure as code and production debugging — rather than a wider set of things
-shallowly.
+[![CI](https://github.com/Akadir695/journal-api/actions/workflows/ci.yml/badge.svg)](https://github.com/Akadir695/journal-api/actions/workflows/ci.yml)
+
+**[Live API](https://journal-api.calmstone-34e3c129.uksouth.azurecontainerapps.io)** · **[Interactive docs](https://journal-api.calmstone-34e3c129.uksouth.azurecontainerapps.io/docs)**
+
+> The first request may take a few seconds — the API scales to zero when idle and has to start.
 
 ---
 
-## What it does
+## What this is
 
-| Area | Features |
-|---|---|
-| Auth | Register, email verification, login, JWT access tokens, refresh token rotation with reuse detection, logout, password reset |
-| Entries | Create, read, update, soft-delete and restore. Every query scoped to the owning user |
-| Organisation | Per-user tags, mood, favourites, separate entry date and created date |
-| Discovery | Pagination, filtering by date range, mood, tag and favourite, and full-text search |
-| Media | Image attachments uploaded straight to Blob Storage using short-lived signed URLs |
-| Insights | Current and longest journaling streak, and a yearly summary of entry counts and moods. Cached in Redis and invalidated on write |
-| Jobs | Background export to a zip of Markdown files, and transactional email |
-| Platform | Rate limiting, caching, structured logging, health probes, RFC 9457 error responses |
+A working backend, taken past the point where it worked.
 
-It is a **JSON-only API**. There is no HTML anywhere, including in the auth flows —
-verification and password reset emails contain codes rather than links, because a link
-into a JSON endpoint cannot complete a flow that needs input. When a frontend exists,
-the links point there instead.
+The application itself was functional in about three weeks. The rest of the time went on the things that turn code into a system someone could operate: containerisation, managed identity, secret management, structured logging, distributed tracing, alerting, and a deployment pipeline that refuses bad commits.
+
+It is deliberately one project taken deep rather than several taken shallow. Everything described below is running, not planned.
 
 ---
 
 ## Architecture
 
-How a request moves through the code:
-
 ```mermaid
-flowchart TD
-    client[Client]
+flowchart LR
+    Client([Client])
 
-    subgraph api["FastAPI application"]
+    subgraph Azure["Azure — rg-journal-dev"]
         direction TB
-        deps["api/deps.py<br/>get_current_user, get_db"]
-        routes["api/v1/routes/<br/>auth, users, entries, tags, stats"]
-        schemas["schemas/<br/>Pydantic request and response models"]
-        crud["crud/<br/>queries and domain logic"]
-        models["db/models/<br/>SQLAlchemy 2.0 declarative"]
+
+        subgraph CAE["Container Apps Environment"]
+            API["journal-api<br/>FastAPI · scales to zero"]
+            Worker["journal-worker<br/>ARQ background jobs"]
+            Redis["redis<br/>internal ingress only"]
+        end
+
+        PG[("PostgreSQL<br/>Flexible Server")]
+        Blob[("Blob Storage<br/>attachments + exports")]
+        KV["Key Vault"]
+        AI["Application Insights"]
+        LA["Log Analytics"]
     end
 
-    db[("PostgreSQL 16")]
+    Resend([Resend<br/>transactional email])
 
-    client --> routes
-    deps -.-> routes
-    routes --> crud
-    crud --> schemas
-    crud --> models
-    models --> db
+    Client -->|HTTPS| API
+    API --> PG
+    API --> Redis
+    API --> Blob
+    Worker --> PG
+    Worker --> Redis
+    Worker --> Blob
+    Worker --> Resend
+    API -.telemetry.-> AI
+    Worker -.telemetry.-> AI
+    AI --> LA
+    API -.managed identity.-> KV
+    Worker -.managed identity.-> KV
 ```
 
-Routes never touch the ORM; the data layer never touches `Request` or `Response`. That
-separation is what made swapping an in-memory store for Postgres a contained change
-early in the project, and what keeps the tests fast.
+The API scales to zero when idle. The worker and Redis hold a single replica each — the worker because ARQ polls a queue, Redis because the queue lives in memory. That choice is the single largest driver of running cost, which is covered below.
 
-### Deployment
+---
 
-```mermaid
-flowchart TD
-    client[Client]
-    ghcr["GitHub Container Registry"]
-    dev["Developer<br/>terraform apply"]
+## Demo
 
-    subgraph aca["Azure Container Apps"]
-        direction LR
-        app["journal-api<br/>external ingress, 0 to 3 replicas"]
-        worker["journal-worker<br/>ARQ, no ingress"]
-        redis["redis<br/>internal ingress only"]
-    end
+Try it at **[/docs](https://journal-api.calmstone-34e3c129.uksouth.azurecontainerapps.io/docs)**.
 
-    subgraph data["Managed services"]
-        direction LR
-        pg[("PostgreSQL<br/>Flexible Server")]
-        blob[("Blob Storage<br/>attachments and exports")]
-        logs[("Log Analytics")]
-    end
+Registration sends a verification code by email, delivered by a background worker through Resend. Once verified, login returns a short-lived access token and a refresh token with rotation and reuse detection — presenting an already-used refresh token revokes every token for that account.
 
-    client --> app
-    ghcr -.->|image pull| aca
-    dev --> aca
-    app --> pg
-    app --> redis
-    app --> blob
-    redis --> worker
-    worker --> pg
-    worker --> blob
-    aca --> logs
-```
+The recording below picks up from an authenticated session: creating, listing, updating, soft-deleting and restoring entries.
 
-The API and the worker are the **same image** with different commands — one runs
-`uvicorn`, the other runs `arq`. They never talk to each other directly: the API puts
-jobs on Redis, the worker takes them off, and both read status from Postgres.
+<!-- VIDEO: drag the .mov into the GitHub README editor and paste the generated URL here -->
 
-The API scales to zero when idle, so it costs nothing between requests. Redis and the
-worker cannot, because nothing would wake them.
+<!-- SCREENSHOTS
+![Verification email](docs/images/verification-email.png)
+![Application Insights](docs/images/app-insights.png)
+![CI pipeline](docs/images/ci-pipeline.png)
+-->
+
+
+---
+
+## API
+
+| Area | Endpoints |
+|---|---|
+| **Auth** | `POST /auth/register` · `login` · `refresh` · `logout` · `verify-email` · `forgot-password` · `reset-password` |
+| **Entries** | `POST /entries` · `GET /entries` · `GET /entries/{id}` · `PATCH /entries/{id}` · `DELETE /entries/{id}` · `POST /entries/{id}/restore` |
+| **Attachments** | `POST /attachments` · `GET /attachments` · `POST /attachments/{id}/confirm` · `GET /attachments/{id}` |
+| **Exports** | `POST /exports` · `GET /exports/{id}` · `GET /exports/{id}/download` |
+| **Stats** | `GET /stats/streak` · `GET /stats/summary` |
+| **Tags** | `GET /tags` |
+| **Users** | `GET /users/me` |
+| **Health** | `GET /health` · `GET /health/ready` |
+
+Notable behaviour:
+
+- **Entries are soft-deleted** and can be restored. Nothing is destroyed on `DELETE`.
+- **Full-text search** over entries using a PostgreSQL `tsvector` column maintained by a migration.
+- **Attachments never pass through the API.** The client requests a signed URL, uploads directly to Blob Storage, then confirms. The API stores metadata only.
+- **Exports run in the background.** `POST /exports` returns `202 Accepted`; the worker builds a zip, uploads it, and the download endpoint returns a short-lived signed URL.
+- **Errors follow RFC 9457** problem details, with a consistent shape across every endpoint.
+- **Rate limiting** is applied per IP in Redis, with a tighter limit on auth routes.
 
 ---
 
 ## Stack
 
-| Concern | Choice | Why |
+| Layer | Choice | Why |
 |---|---|---|
-| Language | Python 3.12 | Modern typing, good async support |
-| Framework | FastAPI + Pydantic v2 | Type hints drive parsing, validation and OpenAPI |
-| Package manager | `uv` | Fast, with a real lockfile |
-| Database | PostgreSQL 16 | Full-text search and JSONB without extra services |
-| ORM | SQLAlchemy 2.0 (async) + `asyncpg` | 2.0 style is typed and visible to mypy |
-| Migrations | Alembic | Version control for schema |
-| Cache and queue | Redis 7 | Rate limits, caching and the job queue in one service |
-| Background jobs | ARQ | Async-native, far simpler than Celery |
-| Password hashing | Argon2 | Current best practice, not bcrypt |
-| JWT | PyJWT | Maintained; `python-jose` is not |
-| Object storage | Azure Blob Storage | Signed URLs keep large uploads off the API |
-| Email | Resend | Simple HTTP API, no SMTP to operate |
-| Testing | pytest, pytest-asyncio, httpx | In-process, no network |
-| Lint and types | ruff + mypy | ruff replaces black, isort and flake8 |
-| Container | Docker, multi-stage | 282 MB runtime image, non-root |
-| Registry | GitHub Container Registry | Free, and already where the code lives |
-| Infrastructure | Terraform | Cloud-agnostic; the skill transfers |
-| Compute | Azure Container Apps | Serverless containers with scale-to-zero |
+| API | FastAPI, Python 3.12 | async throughout, OpenAPI generated from types |
+| Database | PostgreSQL 16 (Azure Flexible Server) | full-text search, and `asyncpg` is fast |
+| ORM | SQLAlchemy 2.0 async + Alembic | typed models, versioned schema |
+| Queue | ARQ over Redis | small, async-native, no Celery overhead |
+| Auth | Argon2 + PyJWT | Argon2id for hashing, short access tokens with refresh rotation |
+| Storage | Azure Blob Storage | direct client upload via signed URLs |
+| Email | Resend | real delivery, no SMTP configuration |
+| Logging | structlog | JSON in production, human-readable locally |
+| Tracing | OpenTelemetry → Application Insights | vendor-neutral instrumentation |
+| Infrastructure | Terraform (azurerm + azuread) | remote state in Azure Storage |
+| CI/CD | GitHub Actions with OIDC | no cloud credentials stored anywhere |
 
 ---
 
-## Running it locally
+## Infrastructure
 
-Requires Docker and [uv](https://docs.astral.sh/uv/).
+Twenty-five Azure resources, all defined in `terraform/`:
 
-```bash
-git clone https://github.com/Akadir695/journal-api.git && cd journal-api
-cp .env.example .env          # then fill in the values
-uv sync
+- Resource group, PostgreSQL Flexible Server + database + firewall rules
+- Container Apps Environment, three container apps (api, worker, redis)
+- Storage account with a private container, shared key access disabled
+- Key Vault with RBAC authorisation
+- Log Analytics workspace and Application Insights
+- A user-assigned managed identity, and seven role assignments
+- An Entra app registration with a federated credential for GitHub Actions
+- An action group and a log search alert rule
 
-docker compose up -d          # Postgres, Redis, Azurite
-uv run alembic upgrade head
+State is held remotely in an Azure Storage account, bootstrapped by hand — Terraform cannot store its own state in something it has not yet created.
 
-uv run uvicorn app.main:app --reload      # terminal 1
-uv run arq app.workers.tasks.WorkerSettings   # terminal 2
+### Rebuilt from scratch
+
+On the last day the entire environment was destroyed and rebuilt from these files alone. It came back in roughly twenty minutes, and the exercise surfaced three things worth knowing:
+
+1. **The alert rule and action group had been created in the portal** and were not in Terraform. They blocked the resource group deletion. Both are now defined in code.
+2. **Azure creates resources you did not ask for.** Application Insights quietly added a Smart Detection action group and a portal dashboard, neither of which Terraform knew about.
+3. **Four steps are not automated**, deliberately or otherwise — see [Known gaps](#known-gaps).
+
+---
+
+## Security
+
+**No secret is stored anywhere it could be read.**
+
+- **In Azure:** the application authenticates to Blob Storage with a user-assigned **managed identity**. Shared key access on the storage account is disabled entirely — `shared_access_key_enabled = false` — so the account keys do not work even if leaked. Signed URLs are produced with a **user delegation key** obtained from Entra ID rather than an account key.
+- **In Key Vault:** the JWT secret, GHCR token and Resend API key are held in Key Vault and referenced by the container apps through the same managed identity. Their *values* are never in Terraform, so they never reach the state file.
+- **In CI:** GitHub Actions authenticates to Azure with **OIDC federated credentials**. GitHub presents a short-lived token proving which repository and branch is running; Azure verifies it against a credential pinned to that exact repo and branch. There is no client secret to rotate or leak.
+- **Least privilege:** the CI identity holds Contributor on the two container apps only — not on the resource group. It cannot reach the database, Key Vault or storage.
+- **Secret scanning** runs in CI on every push, over the full commit history, and gates the build.
+
+---
+
+## Observability
+
+Three questions, three queries. The KQL lives in the repo rather than in someone's browser history.
+
+**Is anything actually broken?**
+
+```kusto
+requests
+| where timestamp > ago(24h)
+| summarize
+    total = count(),
+    client_errors = countif(toint(resultCode) between (400 .. 499)),
+    server_errors = countif(toint(resultCode) >= 500)
+  by name
+| extend server_error_rate_pct = round(100.0 * server_errors / total, 2)
+| order by server_error_rate_pct desc
 ```
 
-Open http://localhost:8000/docs.
+The split matters. Application Insights marks any 4xx or 5xx as a failure, which conflates *"the client sent something wrong"* with *"the server broke"*. A 401 means authentication worked. Alerting on the combined number means being paged because someone mistyped a password.
 
-With no `RESEND_API_KEY` set, emails print to the worker's stdout instead of being
-sent, so local development never emails anyone by accident.
+**What is slow, and is it slow on purpose?**
+
+```kusto
+requests
+| where timestamp > ago(24h)
+| summarize p50 = percentile(duration, 50), p95 = percentile(duration, 95),
+            p99 = percentile(duration, 99), count() by name
+| order by p95 desc
+```
+
+Login sits around 390ms, and that is correct — Argon2 is deliberately slow so that stolen password hashes are expensive to attack. `/health/ready` shows a p50 of 8ms against a max of 185ms; that spread is cold start, the first request after a container wakes paying for new database and Redis connections.
+
+**Which request should I go and look at?**
+
+```kusto
+requests
+| where timestamp > ago(24h)
+| top 20 by duration desc
+| project timestamp, name, duration, resultCode, operation_Id
+```
+
+Every log line carries the trace id of its request, so an `operation_Id` from this query pulls back exactly what that one request did.
+
+**Alerting:** a log search alert fires on any 5xx within a five-minute window and emails an action group. It is defined in Terraform, and it has been tested by stopping the database on purpose and watching the alert arrive.
+
+---
+
+## CI/CD
+
+Every push runs four jobs:
+
+```
+test ──┐
+       ├──> build ──> deploy
+secrets ┘
+```
+
+| Job | Does | Gate |
+|---|---|---|
+| `test` | ruff, then 77 tests against real PostgreSQL, Redis and Azurite service containers, with an 85% coverage floor | blocks build |
+| `secrets` | gitleaks over the full history | blocks build |
+| `build` | builds for `linux/amd64`, tags with the full commit SHA, pushes to GHCR | main only |
+| `deploy` | OIDC login, updates both container apps | main only |
+
+**Images are tagged with the commit SHA**, never a mutable tag. The running container can always be traced to exactly one commit.
+
+**Terraform is not in the pipeline.** Code deploys automatically; infrastructure changes are applied deliberately. A merged pull request should not be able to alter a database. `ignore_changes` on the container image declares the boundary: Terraform owns the shape of the system, CI owns which version runs.
+
+The pipeline has been verified in both directions — a good commit reaching production, and a deliberately broken test leaving `build` and `deploy` skipped.
+
+---
+
+## Running locally
+
+```bash
+git clone https://github.com/Akadir695/journal-api.git
+cd journal-api
+
+cp .env.example .env          # fill in JWT_SECRET
+docker compose up -d          # PostgreSQL, Redis, Azurite
+uv sync
+uv run alembic upgrade head
+uv run uvicorn app.main:app --reload
+```
+
+`http://localhost:8000/docs`
 
 ### Tests
 
 ```bash
 uv run pytest
-uv run ruff check .
-uv run mypy app
 ```
 
-Tests run against a separate database inside a transaction that rolls back after each
-test, so they are order-independent and leave nothing behind.
+77 tests, 89% coverage. They need PostgreSQL, Redis and Azurite running — `docker compose up -d` provides all three.
 
 ---
 
-## Deploying
+## Cost
 
-Infrastructure is defined in `terraform/`. One storage account for Terraform state was
-created by hand — the bootstrap problem, since Terraform needs somewhere to write state
-before it can create anything. Everything else is code.
+Roughly **£2 per week** with the database stopped between sessions, or about £8–9 a month if left running.
 
-```bash
-# build and publish an image tagged with the commit it was built from
-GIT_SHA=$(git rev-parse --short HEAD)
-docker buildx build --platform linux/amd64 \
-  -t ghcr.io/akadir695/journal-api:$GIT_SHA --load .
-docker push ghcr.io/akadir695/journal-api:$GIT_SHA
+| Service | Share |
+|---|---|
+| Azure Container Apps | ~48% |
+| PostgreSQL Flexible Server | ~46% |
+| Azure Monitor (full observability) | ~6% |
+| Key Vault, Storage, bandwidth | < 1% |
 
-cd terraform
-terraform apply -var="image_tag=$GIT_SHA"
-```
-
-`--platform linux/amd64` matters when building on Apple silicon: without it the image
-is arm64 and Container Apps refuses to start it.
-
-The whole environment has been destroyed and rebuilt from code, which is the only real
-proof that it is reproducible rather than merely described.
-
-### Cost control
-
-This runs on a personal pay-as-you-go subscription, so cost is a design constraint
-rather than an afterthought:
-
-- `min_replicas = 0` on the API — no traffic, no charge
-- PostgreSQL stopped between sessions, which is the largest single lever
-- Redis as a Container App rather than Azure Cache, which has no free tier
-- GitHub Container Registry rather than ACR
-- A budget with alerts at 50%, 80% and forecast 100%
-
-The environment is destroyed between working sessions rather than left running, which
-is what keeps this at pennies rather than £15–20 a month. Redis and the worker have to
-stay awake while the environment exists, so leaving it up has a real floor.
+The API itself costs almost nothing, because it scales to zero. The worker and Redis dominate compute despite doing very little, because they cannot. Observability — traces, logs, metrics and alerting — costs about twelve pence a week, which makes "it's too expensive to instrument" hard to defend.
 
 ---
 
-## Known limitations
+## Known gaps
 
-Deliberate trade-offs rather than oversights, and the next things to fix:
+Things that are missing or compromised, and why.
 
-- **Secrets live in Terraform state.** State is a plaintext JSON blob, so the database
-  password and storage keys are in it. It sits in a private container, but the correct
-  fix is Key Vault with a managed identity, which is the next piece of work.
-- **PostgreSQL is publicly reachable**, protected by firewall rules including the
-  "allow Azure services" rule, which is broader than it sounds. Private networking with
-  a VNet and private endpoints would remove the public endpoint entirely.
-- **Email is restricted to the account owner.** Resend only permits sending to your own
-  address until a domain is verified, so the deployed app can currently only email me.
-- **No CI/CD.** Build, push and apply are run by hand. The steps are consistent enough
-  now that automating them is straightforward, and that is planned.
-- **Exports and attachments share one storage container.** They have different retention
-  needs — attachments are permanent, exports are disposable — and should be separated.
-- **Integer primary keys.** Sequential IDs are enumerable. Ownership scoping means no
-  data leaks, but UUIDs would avoid disclosing how many records exist.
+**The database is publicly addressable.** It uses the Azure-services firewall rule (`0.0.0.0`–`0.0.0.0`), which permits connections from *any* resource in Azure, not only mine. Container Apps have no stable outbound IP, so there is no narrower rule available. The production answer is VNet integration with a private endpoint — on Flexible Server that is decided at creation and cannot be changed afterwards.
+
+**Four steps are not automated.** Key Vault secret *values*, the database migration, and (until recently) the alert rule. Secrets are manual on purpose, so they never enter Terraform state. The migration is manual because it is not yet a pipeline step; it should run inside the deploy job before the new revision takes traffic.
+
+**The GHCR token is the last stored credential.** Container Apps cannot pull from a private GitHub Container Registry using a managed identity, so a token is needed. Making the package public removes it entirely.
+
+**Two tests need a live storage emulator.** The worker calls `get_storage()` directly rather than receiving it, so it cannot be given a fake. CI runs Azurite to compensate. The fix is to make storage injectable in the worker path.
+
+**One environment.** `dev` is also production. The variable structure supports more, but the globally-unique resource names have `dev` baked in rather than interpolated. Separate `dev`/`staging`/`prod` with isolated state, a `CanNotDelete` lock on production, and plan review in pull requests would be the next step.
+
+**No backup of blob contents.** Postgres has seven days of automatic backups; Blob Storage has no soft delete or versioning configured. Geo-redundant backup is off deliberately — it costs more, and there is no real data here.
+
+**mypy does not pass.** Roughly fifty pre-existing errors. Better to say so than to claim a clean type check.
+
+---
+
+## Project structure
+
+```
+app/
+  api/v1/routes/     endpoint handlers
+  core/              config, security, storage, logging, rate limiting
+  crud/              database operations
+  db/models/         SQLAlchemy models
+  schemas/           Pydantic request and response models
+  workers/           ARQ background tasks
+alembic/             database migrations
+terraform/           all Azure infrastructure
+tests/               77 tests
+.github/workflows/   CI pipeline
+```
 
 ---
 
 ## Notes
 
-A few decisions that took longer to reach than the code suggests:
+Built over 45 days as a structured learning project. The interesting parts were mostly the failures: telemetry that was accepted by Azure but never displayed because nothing was producing request spans; a coverage threshold that had never run because it was under the wrong TOML heading; tests that only passed because a storage emulator happened to be running on my laptop; and a Terraform configuration that would have silently reverted production to an older image.
 
-**Exports are built in memory and uploaded to Blob Storage**, not written to disk. The
-worker and the API run in separate containers with separate filesystems, so a file
-written by one is invisible to the other — and container disks are ephemeral in any
-case. The download endpoint returns a short-lived signed URL rather than redirecting to
-one, so a client can inspect the URL and its expiry rather than being bounced somewhere
-opaque.
-
-**Refresh tokens rotate, and reuse triggers a full revocation.** Presenting a token that
-has already been used means it was probably stolen, so every session for that user is
-ended rather than just refusing the request.
-
-**Failure paths return the same response.** `forgot-password` returns 202 whether or not
-the address is registered, and requesting another user's entry returns 404 rather than
-403. Both prevent using error responses to discover what exists.
+Each of those is in the commit history.
