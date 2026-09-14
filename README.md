@@ -77,41 +77,13 @@ Notable behaviour:
 
 The clearest illustration of the architecture — three processes, a queue, and object storage, with nothing large passing through the API.
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant C as Client
-    participant A as journal-api
-    participant R as Redis
-    participant W as journal-worker
-    participant P as PostgreSQL
-    participant B as Blob Storage
+![Export flow](docs/images/export-flow.png)
 
-    C->>A: POST /exports
-    A->>P: insert export (status: pending)
-    A->>R: enqueue export_entries
-    A-->>C: 202 Accepted · {id, status}
+Two things worth noticing:
 
-    Note over W: worker polls the queue
-    R->>W: job
-    W->>P: select entries for user
-    W->>W: build zip in memory
-    W->>B: upload exports/export-{id}.zip
-    W->>P: status: ready · file_path
+**The API answers immediately.** Building a zip could take a while, so the request returns `202 Accepted` and the work happens in the worker. The client polls until it is ready.
 
-    loop until ready
-        C->>A: GET /exports/{id}
-        A->>P: read status
-        A-->>C: {status}
-    end
-
-    C->>A: GET /exports/{id}/download
-    A->>B: request user delegation key
-    A-->>C: 302 · signed URL (5 min)
-    C->>B: download directly
-```
-
-The API never holds the file. It signs a short-lived URL using a **user delegation key** obtained from Entra ID through the managed identity — there is no storage account key involved, because shared key access is switched off.
+**The file never passes through the API.** The download endpoint hands back a signed URL valid for five minutes, and the client fetches from Blob Storage directly. That URL is signed with a **user delegation key** from Entra ID via the managed identity — there is no storage account key involved, because shared key access is switched off entirely.
 
 ---
 
