@@ -212,18 +212,63 @@ The pipeline has been verified in both directions — a good commit reaching pro
 
 ## Running locally
 
+No Azure account needed. Docker Compose provides PostgreSQL, Redis and Azurite — a local emulator for Blob Storage — so the whole thing runs offline.
+
+**Prerequisites:** [Docker](https://docs.docker.com/get-docker/), [uv](https://docs.astral.sh/uv/getting-started/installation/), and Python 3.12+ (uv will install it if you don't have it).
+
 ```bash
 git clone https://github.com/Akadir695/journal-api.git
 cd journal-api
+```
 
-cp .env.example .env          # fill in JWT_SECRET
-docker compose up -d          # PostgreSQL, Redis, Azurite
+**1. Configuration**
+
+```bash
+cp .env.example .env
+```
+
+Open `.env` and set `JWT_SECRET` to a random value:
+
+```bash
+openssl rand -hex 32
+```
+
+Everything else in `.env.example` already points at the Compose services and works as-is. The storage connection string in there is Azurite's published development key — not a credential.
+
+**2. Dependencies and services**
+
+```bash
+docker compose up -d     # PostgreSQL, Redis, Azurite
 uv sync
+```
+
+**3. Database schema**
+
+```bash
 uv run alembic upgrade head
+```
+
+**4. Run it**
+
+```bash
 uv run uvicorn app.main:app --reload
 ```
 
-`http://localhost:8000/docs`
+Open **http://localhost:8000/docs**.
+
+**Background jobs** — exports and emails — need the worker running too, in a second terminal:
+
+```bash
+uv run arq app.workers.tasks.WorkerSettings
+```
+
+Without a `RESEND_API_KEY` set, verification and reset emails are printed to the worker's output instead of being sent. That is deliberate, so the flows can be exercised without an email provider.
+
+**To stop everything:**
+
+```bash
+docker compose down          # add -v to delete the database volume too
+```
 
 ### Tests
 
@@ -232,6 +277,32 @@ uv run pytest
 ```
 
 77 tests, 89% coverage. They need PostgreSQL, Redis and Azurite running — `docker compose up -d` provides all three.
+
+### Making a change
+
+```bash
+git checkout -b your-change
+
+uv run ruff check app tests
+uv run pytest
+
+git commit -am "Describe what changed and why"
+git push -u origin your-change
+```
+
+Then open a pull request. CI runs `test` and `secrets` on every pull request, so a broken test or a committed credential shows up before review rather than after merge. `build` and `deploy` only run on `main`, so nothing reaches production from a branch.
+
+Merging to `main` deploys automatically: the image is built and tagged with the commit SHA, and both container apps are updated. There is no manual deployment step.
+
+Infrastructure is separate. Changes under `terraform/` are applied deliberately from a workstation:
+
+```bash
+cd terraform
+terraform plan     # read it
+terraform apply
+```
+
+Terraform is not in the pipeline, by design — see [CI/CD](#cicd).
 
 ---
 
