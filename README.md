@@ -73,6 +73,46 @@ Notable behaviour:
 - **Errors follow RFC 9457** problem details, with a consistent shape across every endpoint.
 - **Rate limiting** is applied per IP in Redis, with a tighter limit on auth routes.
 
+### How an export flows
+
+The clearest illustration of the architecture — three processes, a queue, and object storage, with nothing large passing through the API.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant A as journal-api
+    participant R as Redis
+    participant W as journal-worker
+    participant P as PostgreSQL
+    participant B as Blob Storage
+
+    C->>A: POST /exports
+    A->>P: insert export (status: pending)
+    A->>R: enqueue export_entries
+    A-->>C: 202 Accepted · {id, status}
+
+    Note over W: worker polls the queue
+    R->>W: job
+    W->>P: select entries for user
+    W->>W: build zip in memory
+    W->>B: upload exports/export-{id}.zip
+    W->>P: status: ready · file_path
+
+    loop until ready
+        C->>A: GET /exports/{id}
+        A->>P: read status
+        A-->>C: {status}
+    end
+
+    C->>A: GET /exports/{id}/download
+    A->>B: request user delegation key
+    A-->>C: 302 · signed URL (5 min)
+    C->>B: download directly
+```
+
+The API never holds the file. It signs a short-lived URL using a **user delegation key** obtained from Entra ID through the managed identity — there is no storage account key involved, because shared key access is switched off.
+
 ---
 
 ## Stack
@@ -181,11 +221,7 @@ Every log line carries the trace id of its request, so an `operation_Id` from th
 
 Every push runs four jobs:
 
-```
-test ──┐
-       ├──> build ──> deploy
-secrets ┘
-```
+![Deployment pipeline](docs/images/pipeline.png)
 
 | Job | Does | Gate |
 |---|---|---|
