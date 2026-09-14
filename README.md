@@ -114,6 +114,8 @@ Twenty-five Azure resources, all defined in `terraform/`:
 
 State is held remotely in an Azure Storage account, bootstrapped by hand — Terraform cannot store its own state in something it has not yet created.
 
+To run it against your own subscription: copy `terraform/terraform.tfvars.example` to `terraform.tfvars` and edit it, put the Postgres admin password in `secrets.auto.tfvars` (gitignored), and change the `backend` block in `main.tf` to point at a storage account you own. The one committed here is mine and you will not have access to it.
+
 ### Rebuilt from scratch
 
 On the last day the entire environment was destroyed and rebuilt from these files alone. It came back in roughly twenty minutes, and the exercise surfaced three things worth knowing:
@@ -270,7 +272,9 @@ docker compose down          # add -v to delete the database volume too
 uv run pytest
 ```
 
-77 tests, 89% coverage. They need PostgreSQL, Redis and Azurite running — `docker compose up -d` provides all three.
+77 tests, 89% coverage. They need PostgreSQL, Redis and Azurite running — `docker compose up -d` provides all three, and creates the separate `journaldb_test` database the suite requires.
+
+The tests refuse to run against any database whose name does not end in `_test`, so there is no way to point them at real data by accident.
 
 
 ---

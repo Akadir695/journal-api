@@ -1,0 +1,18 @@
+# Copy to terraform.tfvars and edit. Nothing here is a secret.
+#
+# The admin password is deliberately absent — keep it in secrets.auto.tfvars,
+# which is gitignored, or pass it with TF_VAR_postgres_admin_password.
+
+project     = "journal"
+environment = "dev"
+location    = "uksouth"
+
+# Receives alerts from the 5xx alert rule.
+alert_email = "you@example.com"
+
+# Used to pull the container image from GitHub Container Registry.
+github_username = "your-github-username"
+
+# Only read when Terraform first creates the container apps. CI owns the image
+# after that, so this is just the starting image for a new environment.
+image_tag = "latest"
