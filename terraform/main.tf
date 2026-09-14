@@ -460,3 +460,48 @@ resource "azurerm_role_assignment" "ci_worker" {
   role_definition_name = "Contributor"
   principal_id         = azuread_service_principal.ci.object_id
 }
+# Found by the Day 45 rebuild: these were created in the portal and were not
+# in Terraform, so they blocked the resource group deletion.
+resource "azurerm_monitor_action_group" "email" {
+  name                = "ag-journal-email"
+  resource_group_name = azurerm_resource_group.main.name
+  short_name          = "journal"
+
+  email_receiver {
+    name          = "email-me"
+    email_address = var.alert_email
+  }
+}
+
+resource "azurerm_monitor_scheduled_query_rules_alert_v2" "api_5xx" {
+  name                = "journal-api-5xx"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+
+  description = "Fires when the API returns any 5xx in a 5-minute window. 4xx are excluded: those mean the client sent something wrong, not that the server failed."
+  severity    = 2
+
+  scopes                  = [azurerm_application_insights.main.id]
+  evaluation_frequency    = "PT5M"
+  window_duration         = "PT5M"
+  auto_mitigation_enabled = true
+
+  criteria {
+    query                   = <<-QUERY
+      requests
+      | where toint(resultCode) >= 500
+    QUERY
+    time_aggregation_method = "Count"
+    threshold               = 0
+    operator                = "GreaterThan"
+
+    failing_periods {
+      minimum_failing_periods_to_trigger_alert = 1
+      number_of_evaluation_periods             = 1
+    }
+  }
+
+  action {
+    action_groups = [azurerm_monitor_action_group.email.id]
+  }
+}

@@ -47,3 +47,8 @@ variable "azure_storage_container" {
   description = "Blob container for attachments and exports"
   default     = "attachments"
 }
+
+variable "alert_email" {
+  type        = string
+  description = "Address that receives alert notifications"
+}
