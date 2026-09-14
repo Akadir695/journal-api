@@ -36,7 +36,9 @@ variable "github_username" {
 variable "image_tag" {
   type        = string
   description = "Image tag to deploy"
-  default     = "3195ef7"
+  # Only read when Terraform first creates the container apps. After that CI
+  # owns the image, so this is the starting image for a rebuilt environment.
+  default = "905d834fb593605c0621d77d0e24b914471bc46b"
 }
 
 
