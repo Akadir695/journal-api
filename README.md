@@ -1,3 +1,7 @@
+
+
+https://github.com/user-attachments/assets/0758f8a9-08ff-438b-bb20-b838e9b588ce
+
 # Journal API
 
 A private journaling API built with FastAPI and deployed to Azure Container Apps, with every piece of infrastructure defined in Terraform.
