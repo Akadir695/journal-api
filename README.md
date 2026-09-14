@@ -24,7 +24,7 @@ It is deliberately one project taken deep rather than several taken shallow. Eve
 
 ![Architecture](docs/images/architecture.png)
 
-Twenty-five Azure resources, all created by Terraform. Transactional email is sent by the worker through Resend, the only third-party service in the system.
+Twenty-seven Azure resources, all created by Terraform. Transactional email is sent by the worker through Resend, the only third-party service in the system.
 
 The API scales to zero when idle. The worker and Redis hold a single replica each — the worker because ARQ polls a queue, Redis because the queue lives in memory. That choice is the single largest driver of running cost, which is covered below.
 
@@ -101,7 +101,7 @@ Two things worth noticing:
 
 ## Infrastructure
 
-Twenty-five Azure resources, all defined in `terraform/`:
+Twenty-seven Azure resources, all defined in `terraform/`:
 
 - Resource group, PostgreSQL Flexible Server + database + firewall rules
 - Container Apps Environment, three container apps (api, worker, redis)
@@ -344,7 +344,7 @@ journal-api/
 ├── alembic/versions/               12 migrations
 │
 ├── terraform/
-│   ├── main.tf                     25 resources
+│   ├── main.tf                     27 resources
 │   ├── variables.tf
 │   ├── outputs.tf
 │   └── terraform.tfvars            non-secret values (secrets.auto.tfvars is gitignored)
