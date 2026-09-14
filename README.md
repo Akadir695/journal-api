@@ -278,31 +278,6 @@ uv run pytest
 
 77 tests, 89% coverage. They need PostgreSQL, Redis and Azurite running — `docker compose up -d` provides all three.
 
-### Making a change
-
-```bash
-git checkout -b your-change
-
-uv run ruff check app tests
-uv run pytest
-
-git commit -am "Describe what changed and why"
-git push -u origin your-change
-```
-
-Then open a pull request. CI runs `test` and `secrets` on every pull request, so a broken test or a committed credential shows up before review rather than after merge. `build` and `deploy` only run on `main`, so nothing reaches production from a branch.
-
-Merging to `main` deploys automatically: the image is built and tagged with the commit SHA, and both container apps are updated. There is no manual deployment step.
-
-Infrastructure is separate. Changes under `terraform/` are applied deliberately from a workstation:
-
-```bash
-cd terraform
-terraform plan     # read it
-terraform apply
-```
-
-Terraform is not in the pipeline, by design — see [CI/CD](#cicd).
 
 ---
 
