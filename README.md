@@ -22,44 +22,13 @@ It is deliberately one project taken deep rather than several taken shallow. Eve
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    Client([Client])
+![Architecture](docs/images/architecture.png)
 
-    subgraph Azure["Azure — rg-journal-dev"]
-        direction TB
-
-        subgraph CAE["Container Apps Environment"]
-            API["journal-api<br/>FastAPI · scales to zero"]
-            Worker["journal-worker<br/>ARQ background jobs"]
-            Redis["redis<br/>internal ingress only"]
-        end
-
-        PG[("PostgreSQL<br/>Flexible Server")]
-        Blob[("Blob Storage<br/>attachments + exports")]
-        KV["Key Vault"]
-        AI["Application Insights"]
-        LA["Log Analytics"]
-    end
-
-    Resend([Resend<br/>transactional email])
-
-    Client -->|HTTPS| API
-    API --> PG
-    API --> Redis
-    API --> Blob
-    Worker --> PG
-    Worker --> Redis
-    Worker --> Blob
-    Worker --> Resend
-    API -.telemetry.-> AI
-    Worker -.telemetry.-> AI
-    AI --> LA
-    API -.managed identity.-> KV
-    Worker -.managed identity.-> KV
-```
+Twenty-five Azure resources, all created by Terraform. Transactional email is sent by the worker through Resend, the only third-party service in the system.
 
 The API scales to zero when idle. The worker and Redis hold a single replica each — the worker because ARQ polls a queue, Redis because the queue lives in memory. That choice is the single largest driver of running cost, which is covered below.
+
+The dotted lines are worth reading: the application reaches Key Vault through a **managed identity**, and GitHub deploys through **OIDC**. Neither path involves a stored credential.
 
 ---
 
