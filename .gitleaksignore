@@ -1,0 +1,11 @@
+# Known findings that are not secrets. Reviewed 2026-09-14.
+#
+# 1-2: Azurite's development storage key. Published by Microsoft, identical on
+#      every machine, and only unlocks a local emulator. Flagged on entropy.
+# 3-4: password_secret_name is the *name* of a Container Apps secret, not a
+#      password. The rule matches on the word "password" in the key.
+
+c73b1551a2daaf2b4f79c06b977ba84f63fc003c:.github/workflows/ci.yml:generic-api-key:41
+551780f1e2a59d7de068810f6fe940ed816382f6:.env.example:generic-api-key:21
+b70be4fbc50b615d0aaf1a493d2f3103f6a25c0e:terraform/main.tf:hashicorp-tf-password:245
+ebc578973b66bae6541289b84f93f540a9320ffd:terraform/main.tf:hashicorp-tf-password:149
